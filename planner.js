@@ -272,14 +272,14 @@
     });
     var warnings = [];
     if (opts.sweatRate > 0 && opts.fluidPerHour / 1000 > opts.sweatRate) {
-      warnings.push('Fluid target is above her sweat rate (' + opts.sweatRate.toFixed(2) + ' L/h). Drinking more than she sweats over a long race can dilute blood sodium (hyponatraemia), so keep fluid at or below sweat rate.');
+      warnings.push('Fluid target is above your sweat rate (' + opts.sweatRate.toFixed(2) + ' L/h). Drinking more than you sweat over a long race can dilute blood sodium (hyponatraemia), so keep fluid at or below sweat rate.');
     }
     if (opts.weightKg > 0 && sum.caffeine / opts.weightKg > 6) {
-      warnings.push('Caffeine comes to ' + Math.round(sum.caffeine) + ' mg (' + (sum.caffeine / opts.weightKg).toFixed(1) + ' mg/kg), above the 3–6 mg/kg range usually studied. Only race on amounts she has tried in training.');
+      warnings.push('Caffeine comes to ' + Math.round(sum.caffeine) + ' mg (' + (sum.caffeine / opts.weightKg).toFixed(1) + ' mg/kg), above the 3–6 mg/kg range usually studied. Only race on amounts you have tried in training.');
     }
     var anyCarb = products.some(function (p) { return p.use && p.carbs > 0; });
     if (anyCarb && sum.carbs < sum.needCarbs * 0.9) {
-      warnings.push('Her products only cover ' + Math.round(sum.carbs) + ' g of the ' + Math.round(sum.needCarbs) + ' g carbs target. Add a gel, chew or food with carbs.');
+      warnings.push('Your products only cover ' + Math.round(sum.carbs) + ' g of the ' + Math.round(sum.needCarbs) + ' g carbs target. Add a gel, chew or food with carbs.');
     }
     return { legs: legs, totals: totals, sum: sum, warnings: warnings };
   }

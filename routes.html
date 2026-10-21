@@ -39,6 +39,10 @@
   .seg button + button { border-left: 1px solid var(--line); }
   .seg button.on { background: var(--hot); color: #fff; font-weight: 600; }
   .field { margin-top: 12px; }
+  .search-row { display: flex; gap: 8px; }
+  .search-row input { flex: 1; }
+  .places { display: grid; gap: 6px; margin-top: 8px; }
+  .place { text-align: left; background: var(--bg); color: var(--ink); border: 1px solid var(--line); font-size: 0.9rem; padding: 8px 10px; }
   .start-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .stats { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 10px 0 4px; color: var(--muted); font-size: 0.95rem; }
   .stats b { color: var(--ink); font-size: 1.05rem; }
@@ -74,7 +78,12 @@
 <main>
   <section class="card">
     <h2>Make me a route</h2>
-    <div class="start-row">
+    <form class="search-row" id="searchForm" role="search">
+      <input id="place" type="search" placeholder="Town or postcode, e.g. Canterbury, Kent" autocomplete="off" aria-label="Search for a place">
+      <button type="submit" id="findBtn">Find</button>
+    </form>
+    <div class="places" id="places"></div>
+    <div class="start-row field">
       <button class="ghost" id="locate" type="button">📍 Start from my location</button>
       <span class="hint" id="startInfo">or tap the map to set a start</span>
     </div>
@@ -117,12 +126,12 @@
     <div class="grid field" id="saveRow">
       <div><label for="saveName">Name</label><input id="saveName"></div>
     </div>
-    <div class="row-actions"><button class="ghost" id="saveBtn" type="button">Save to her routes</button></div>
-    <p class="hint">Download the GPX and open it with the COROS app to put the route on her watch.</p>
+    <div class="row-actions"><button class="ghost" id="saveBtn" type="button">Save to Lucy's routes</button></div>
+    <p class="hint">Download the GPX and open it with the COROS app to put the route on your watch.</p>
   </section>
 
   <section class="card">
-    <h2>Her routes</h2>
+    <h2>Lucy's routes</h2>
     <div class="lib" id="lib"></div>
     <div class="field">
       <label for="importGpx">Import a GPX (a COROS run, Strava, Komoot, AllTrails…)</label>
@@ -131,7 +140,7 @@
     <p class="hint">Saved on this phone only.</p>
   </section>
 
-  <p class="hint">Routes follow footpaths and lanes from OpenStreetMap via the <a href="https://routing.openstreetmap.de/about.html">FOSSGIS routing server</a>. Paths change, so check a new route looks sensible before heading out, and <a href="https://www.openstreetmap.org/fixthemap">fix the map</a> if something's wrong. Elevation: <a href="https://open-meteo.com/">Open-Meteo</a> (Copernicus DEM GLO-90, produced using Copernicus data).</p>
+  <p class="hint">Routes follow footpaths and lanes from OpenStreetMap via the <a href="https://routing.openstreetmap.de/about.html">FOSSGIS routing server</a>. Paths change, so check a new route looks sensible before heading out, and <a href="https://www.openstreetmap.org/fixthemap">fix the map</a> if something's wrong. Elevation: <a href="https://open-meteo.com/">Open-Meteo</a> (Copernicus DEM GLO-90, produced using Copernicus data). Place search: <a href="https://nominatim.openstreetmap.org/">Nominatim</a>, © OpenStreetMap contributors, used under its <a href="https://operations.osmfoundation.org/policies/nominatim/">usage policy</a>.</p>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
@@ -159,7 +168,8 @@
   // ---------- Map ----------
   var map = new maplibregl.Map({
     container: 'map', style: 'https://tiles.openfreemap.org/styles/liberty',
-    center: [-2.13, 49.215], zoom: 10.6, pitch: 50, bearing: -15, maxPitch: 80,
+    center: state.start ? [state.start.lon, state.start.lat] : [-2.13, 49.215],
+    zoom: state.start ? 12.5 : 10.6, pitch: 50, bearing: -15, maxPitch: 80,
     attributionControl: { compact: true }
   });
   map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
@@ -227,6 +237,55 @@
       $('startInfo').textContent = 'Couldn\'t get your location. Tap the map instead.';
     }, { enableHighAccuracy: true, timeout: 10000 });
   });
+
+  // ---------- Place search (Nominatim: on submit only, cached, max 1 request/second) ----------
+  var GEO_CACHE = 'rtr-geo-v1', lastSearch = 0;
+  $('searchForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var q = $('place').value.trim();
+    if (!q) return;
+    var key = q.toLowerCase(), cache = {};
+    try { cache = JSON.parse(localStorage.getItem(GEO_CACHE) || '{}') || {}; } catch (err) {}
+    if (cache[key]) { showPlaces(cache[key].r); return; }
+    var wait = Math.max(0, lastSearch + 1100 - Date.now());
+    $('findBtn').disabled = true;
+    $('places').innerHTML = '<p class="hint">Searching…</p>';
+    sleep(wait).then(function () {
+      lastSearch = Date.now();
+      return fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&accept-language=en-GB&q=' + encodeURIComponent(q));
+    }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function (list) {
+      var places = (list || []).map(function (p) {
+        return { name: p.display_name, lat: +p.lat, lon: +p.lon, bbox: (p.boundingbox || []).map(Number) };
+      });
+      cache[key] = { t: Date.now(), r: places };
+      var keys = Object.keys(cache).sort(function (a, b) { return cache[b].t - cache[a].t; });
+      keys.slice(30).forEach(function (k) { delete cache[k]; });
+      try { localStorage.setItem(GEO_CACHE, JSON.stringify(cache)); } catch (err) {}
+      showPlaces(places);
+    }).catch(function () {
+      $('places').innerHTML = '<p class="hint error">Search didn\'t work just now. Try again in a moment, or pan the map and tap to set a start.</p>';
+    }).then(function () { $('findBtn').disabled = false; });
+  });
+
+  function showPlaces(places) {
+    if (!places.length) { $('places').innerHTML = '<p class="hint">Nothing found. Try adding the county, e.g. "Wye, Kent".</p>'; return; }
+    $('places').innerHTML = '';
+    places.forEach(function (p) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'place'; b.textContent = p.name;
+      b.addEventListener('click', function () {
+        $('places').innerHTML = '';
+        setStart(p.lat, p.lon);
+        results = []; renderResults(); drawOthers();
+        map.flyTo({ center: [p.lon, p.lat], zoom: 13, duration: 1500 });
+        $('startInfo').textContent = 'Start set in ' + p.name.split(',')[0] + '. Tap the map to fine-tune it.';
+      });
+      $('places').appendChild(b);
+    });
+  }
 
   // ---------- Options ----------
   function segment(id, key) {
@@ -364,6 +423,7 @@
       renderResults(); drawOthers();
       select(results[0], true);
     }).catch(function (e) {
+      if (window.console) console.warn('Route generation failed:', e && e.message);
       var msg = e.message === 'none-near' ? 'Couldn\'t get close to ' + target + ' km from here. Try a different start or distance.' :
         e.message === 'elevation' ? 'Found routes but couldn\'t check the hills. Check your connection and try again.' :
         'The route service didn\'t respond. Check your connection and try again in a minute.';
@@ -422,7 +482,7 @@
       '<span>about <b>' + P.fmtDur(s.minutes) + '</b></span>';
     $('saveName').value = current.name;
     var saved = current.source === 'lib';
-    $('saveBtn').textContent = saved ? 'Rename' : 'Save to her routes';
+    $('saveBtn').textContent = saved ? 'Rename' : 'Save to Lucy\'s routes';
     drawProfile(current.profile);
   }
 

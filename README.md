@@ -30,10 +30,10 @@ Map: [OpenFreeMap](https://openfreemap.org/) (© OpenMapTiles, OpenStreetMap con
 
 ## Plan a run (`routes.html`)
 
-- **Route generator:** set a start (GPS or tap the map), a distance and Hilly / Any / Flat, as a loop or out-and-back. It tries six directions on real footpaths and lanes, checks the climb on each, and offers the best three.
+- **Route generator:** set a start (search a town or postcode, use GPS, or tap the map; works anywhere, not just Jersey), a distance and Hilly / Any / Flat, as a loop or out-and-back. It tries six directions on real footpaths and lanes, checks the climb on each, and offers the best three.
 - **Her routes:** save generated routes or import any GPX (a COROS run, Strava, Komoot, AllTrails). View in 3D, fly through, download GPX for the watch.
 
-Routing: [FOSSGIS OSRM](https://routing.openstreetmap.de/about.html) foot profile on OpenStreetMap data (kept to one request per second, per their policy). Elevation: Open-Meteo.
+Place search: [Nominatim](https://nominatim.openstreetmap.org/) (search on submit only, results cached, max one request per second, per its [usage policy](https://operations.osmfoundation.org/policies/nominatim/)). Routing: [FOSSGIS OSRM](https://routing.openstreetmap.de/about.html) foot profile on OpenStreetMap data (kept to one request per second, per their policy). Elevation: Open-Meteo.
 
 ## How the pacing works
 

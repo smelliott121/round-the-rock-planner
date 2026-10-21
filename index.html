@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Round the Rock Planner</title>
+<title>Lucy's Race Planner</title>
 <meta name="description" content="Elevation-adjusted pacing, fuelling and crew plan for a trail ultra.">
 <style>
   :root {
@@ -94,7 +94,7 @@
 </head>
 <body>
 <main>
-  <h1>Round the Rock Planner</h1>
+  <h1>Lucy's Round the Rock Planner</h1>
   <p class="sub">Elevation-adjusted splits, fuelling and a crew sheet for race day.</p>
   <p class="no-print" style="margin:-8px 0 20px"><a href="map.html"><b>3D course map →</b></a> &nbsp;·&nbsp; <a href="routes.html"><b>Plan a training run →</b></a></p>
 
@@ -143,11 +143,11 @@
       <div><label for="sweatNa">Sweat sodium (mg/L)</label><input id="sweatNa" type="number" min="0" step="50" value="800"></div>
       <div><label for="caffKm">Caffeine from (km)</label><input id="caffKm" type="number" min="0" step="1" placeholder="halfway"></div>
     </div>
-    <p class="hint">Sweat sodium varies a lot between people (roughly 400–1,500 mg/L). 800 is a middle guess; a sweat test at a sports clinic gives her real number. Everything here stays on this phone.</p>
+    <p class="hint">Sweat sodium varies a lot between people (roughly 400–1,500 mg/L). 800 is a middle guess; a sweat test at a sports clinic gives your real number. Everything here stays on this phone.</p>
 
     <details class="sweat-test">
       <summary>Sweat test calculator</summary>
-      <p class="hint">Weigh in minimal clothing, run for about an hour at race effort in similar weather, towel off, weigh again. Note anything she drank.</p>
+      <p class="hint">Weigh in minimal clothing, run for about an hour at race effort in similar weather, towel off, weigh again. Note anything you drank.</p>
       <div class="grid">
         <div><label for="stBefore">Weight before (kg)</label><input id="stBefore" type="number" step="0.1"></div>
         <div><label for="stAfter">Weight after (kg)</label><input id="stAfter" type="number" step="0.1"></div>
@@ -158,7 +158,7 @@
       <div class="row-actions"><button class="ghost" id="stUse" type="button" disabled>Use this sweat rate</button></div>
     </details>
 
-    <h3>Her products</h3>
+    <h3>Lucy's products</h3>
     <div id="products" class="products"></div>
     <div class="row-actions">
       <button class="ghost" type="button" data-add="gel">+ Gel</button>
@@ -374,7 +374,7 @@
     var box = $('products');
     box.innerHTML = '';
     if (!products.length) {
-      box.innerHTML = '<p class="hint">No products yet. Add what she actually uses in training.</p>';
+      box.innerHTML = '<p class="hint">No products yet. Add what you actually use in training.</p>';
       return;
     }
     products.forEach(function (p, i) {
@@ -572,7 +572,7 @@
         (fuel.sum.caffeine ? ', ' + Math.round(fuel.sum.caffeine) + ' mg caffeine' : '') +
         '. Pack one or two spares of each.</p></div>';
     } else {
-      $('shopping').innerHTML = '<p class="hint no-print">Add her gels and drinks in section 4 to get a carry list for each leg.</p>';
+      $('shopping').innerHTML = '<p class="hint no-print">Add your gels and drinks in section 4 to get a carry list for each leg.</p>';
     }
   }
 
