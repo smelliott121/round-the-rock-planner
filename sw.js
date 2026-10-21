@@ -1,7 +1,9 @@
 /* Offline support: the app itself is network-first (so updates arrive straight away)
    with a cached copy for when there's no signal. Map tiles she has viewed are kept too. */
-var VERSION = 'v4-2026-10-21';
-var APP = 'app-' + VERSION, TILES = 'tiles-v1';
+var VERSION = 'v5-2026-10-21';
+// Cache names start with rtr- so this app never touches caches belonging to other apps
+// on the same github.io address (e.g. the commodity map).
+var APP = 'rtr-app-' + VERSION, TILES = 'rtr-tiles-v1';
 var SHELL = ['./', 'index.html', 'css/app.css', 'planner.js', 'js/app.js', 'js/today.js', 'js/race.js', 'js/run.js', 'js/fuel.js', 'js/kit.js',
   'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png',
   'https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js', 'https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css'];
@@ -17,7 +19,8 @@ self.addEventListener('install', function (e) {
 
 self.addEventListener('activate', function (e) {
   e.waitUntil(caches.keys().then(function (keys) {
-    return Promise.all(keys.filter(function (k) { return k !== APP && k !== TILES; }).map(function (k) { return caches.delete(k); }));
+    var mineButOld = function (k) { return (/^rtr-/.test(k) || /^(app|tiles)-v/.test(k)) && k !== APP && k !== TILES; };
+    return Promise.all(keys.filter(mineButOld).map(function (k) { return caches.delete(k); }));
   }).then(function () { return self.clients.claim(); }));
 });
 
