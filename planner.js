@@ -192,6 +192,99 @@
     };
   }
 
+  /*
+   * Fuel: turn each leg's needs into servings of her own products.
+   *   fluid  = hours × fluid per hour (she sets it; the UI warns above sweat rate)
+   *   sodium = litres drunk × sweat sodium (mg/L), so what she drinks is about
+   *            as salty as what she sweats
+   *   carbs  = hours × carbs per hour
+   * Order: a drink mix covers the fluid (and brings its own carbs and sodium),
+   * gels/chews/food top up carbs (rotating between products), salt tabs top up sodium.
+   */
+  var SOLID_KINDS = { gel: 1, chew: 1, food: 1 };
+
+  function sweatRate(beforeKg, afterKg, drankMl, minutes) {
+    if (!(beforeKg > 0) || !(afterKg > 0) || !(minutes > 0)) return null;
+    var litres = (beforeKg - afterKg) + (drankMl || 0) / 1000;
+    if (litres <= 0) return null;
+    return litres / (minutes / 60);
+  }
+
+  function legFuel(movingMin, legStartKm, opts, products) {
+    var h = movingMin / 60;
+    var need = {
+      carbs: h * (opts.carbsPerHour || 0),
+      fluid: h * (opts.fluidPerHour || 0),
+      sodium: h * (opts.fluidPerHour || 0) / 1000 * (opts.sweatSodium || 0)
+    };
+    var got = { carbs: 0, fluid: 0, sodium: 0, caffeine: 0 };
+    var counts = products.map(function () { return 0; });
+    function add(i, n) {
+      var p = products[i];
+      counts[i] += n;
+      got.carbs += n * (p.carbs || 0);
+      got.sodium += n * (p.sodium || 0);
+      got.caffeine += n * (p.caffeine || 0);
+    }
+
+    var drinkIdx = products.findIndex(function (p) { return p.use && p.kind === 'drink' && p.ml > 0; });
+    if (drinkIdx >= 0 && need.fluid > 0) {
+      var servings = Math.round(need.fluid / products[drinkIdx].ml * 2) / 2;
+      if (servings > 0) add(drinkIdx, servings);
+    }
+    got.fluid = need.fluid;
+
+    var solids = [];
+    // Caffeinated products only from the chosen km (default: halfway).
+    var caffOk = legStartKm >= (opts.caffeineFromKm || 0);
+    products.forEach(function (p, i) {
+      if (p.use && SOLID_KINDS[p.kind] && p.carbs > 0 && (caffOk || !(p.caffeine > 0))) solids.push(i);
+    });
+    if (solids.length) {
+      var smallest = Math.min.apply(null, solids.map(function (i) { return products[i].carbs; }));
+      for (var guard = 0; guard < 300 && got.carbs < need.carbs - smallest / 2; guard++) {
+        var pick = solids.reduce(function (best, i) { return counts[i] < counts[best] ? i : best; }, solids[0]);
+        add(pick, 1);
+      }
+    }
+
+    var saltIdx = products.findIndex(function (p) { return p.use && p.kind === 'salt' && p.sodium > 0; });
+    if (saltIdx >= 0) {
+      var tab = products[saltIdx].sodium;
+      for (var g2 = 0; g2 < 100 && got.sodium < need.sodium - tab / 2; g2++) add(saltIdx, 1);
+    }
+
+    var items = [];
+    counts.forEach(function (n, i) { if (n > 0) items.push({ index: i, name: products[i].name, kind: products[i].kind, count: n }); });
+    return { need: need, got: got, items: items, counts: counts };
+  }
+
+  function computeFuel(rows, opts, products) {
+    products = products || [];
+    var legs = rows.map(function (r, i) { return legFuel(r.legMovingMin, i ? rows[i - 1].km : 0, opts, products); });
+    var totals = products.map(function () { return 0; });
+    var sum = { carbs: 0, fluid: 0, sodium: 0, caffeine: 0, needCarbs: 0, needSodium: 0 };
+    legs.forEach(function (l) {
+      l.counts.forEach(function (n, i) { totals[i] += n; });
+      sum.carbs += l.got.carbs; sum.fluid += l.got.fluid; sum.sodium += l.got.sodium; sum.caffeine += l.got.caffeine;
+      sum.needCarbs += l.need.carbs; sum.needSodium += l.need.sodium;
+    });
+    var warnings = [];
+    if (opts.sweatRate > 0 && opts.fluidPerHour / 1000 > opts.sweatRate) {
+      warnings.push('Fluid target is above her sweat rate (' + opts.sweatRate.toFixed(2) + ' L/h). Drinking more than she sweats over a long race can dilute blood sodium (hyponatraemia), so keep fluid at or below sweat rate.');
+    }
+    if (opts.weightKg > 0 && sum.caffeine / opts.weightKg > 6) {
+      warnings.push('Caffeine comes to ' + Math.round(sum.caffeine) + ' mg (' + (sum.caffeine / opts.weightKg).toFixed(1) + ' mg/kg), above the 3–6 mg/kg range usually studied. Only race on amounts she has tried in training.');
+    }
+    var anyCarb = products.some(function (p) { return p.use && p.carbs > 0; });
+    if (anyCarb && sum.carbs < sum.needCarbs * 0.9) {
+      warnings.push('Her products only cover ' + Math.round(sum.carbs) + ' g of the ' + Math.round(sum.needCarbs) + ' g carbs target. Add a gel, chew or food with carbs.');
+    }
+    return { legs: legs, totals: totals, sum: sum, warnings: warnings };
+  }
+
+  function fmtCount(n) { return (n % 1 ? n.toFixed(1) : String(n)) + '×'; }
+
   function fmtDur(min) {
     var neg = min < 0; min = Math.abs(Math.round(min));
     var s = Math.floor(min / 60) + ':' + String(min % 60).padStart(2, '0');
@@ -212,7 +305,8 @@
 
   var api = {
     parseGPX: parseGPX, buildProfile: buildProfile, computePlan: computePlan,
-    gradeCost: gradeCost, elevationSamples: elevationSamples, applyElevation: applyElevation, fmtDur: fmtDur, fmtClock: fmtClock, fmtPace: fmtPace,
+    gradeCost: gradeCost, elevationSamples: elevationSamples, applyElevation: applyElevation,
+    sweatRate: sweatRate, computeFuel: computeFuel, fmtCount: fmtCount, fmtDur: fmtDur, fmtClock: fmtClock, fmtPace: fmtPace,
     parseHM: parseHM, STEP_KM: STEP_KM
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

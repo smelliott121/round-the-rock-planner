@@ -54,7 +54,27 @@
   .ok { color: var(--ok); } .warn { color: var(--warn); font-weight: 600; }
   .big { font-size: 1.05rem; font-weight: 700; }
   .crew-only { display: none; }
+  h3 { font-size: 0.95rem; margin: 18px 0 8px; }
+  select { width: 100%; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 6px; }
+  details.sweat-test { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
+  details.sweat-test summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+  .products { display: grid; gap: 10px; }
+  .product { border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: grid; gap: 8px;
+    grid-template-columns: 2fr 1.2fr; }
+  .product .nums { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .product .foot { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: var(--muted); }
+  .product .foot label { display: flex; gap: 6px; align-items: center; margin: 0; font-size: 0.85rem; }
+  .product .foot input { width: auto; }
+  .product label { font-size: 0.72rem; }
+  .product.off { opacity: 0.55; }
+  tr.carry td { text-align: left; white-space: normal; color: var(--muted); font-size: 0.84rem; padding-top: 0; }
+  tr.has-carry td { border-bottom: none; }
+  .warn-box { border: 1px solid var(--warn); border-radius: 10px; padding: 10px 12px; margin: 10px 0; color: var(--warn); font-size: 0.9rem; }
+  .shop { margin-top: 14px; }
+  .shop ul { margin: 6px 0 0; padding-left: 20px; }
   @media (max-width: 560px) {
+    .product .nums { grid-template-columns: repeat(2, 1fr); }
     .cp { grid-template-columns: 1fr 0.7fr 0.6fr auto; }
     .cp .cutoff { grid-column: 1 / 3; }
     .hide-sm { display: none; }
@@ -114,11 +134,48 @@
     <p class="hint">Use the official checkpoint distances and cutoffs from the race info once they're out.</p>
   </section>
 
+  <section class="card inputs">
+    <h2>4. Fuel &amp; body</h2>
+    <div class="grid">
+      <div><label for="weight">Body weight (kg)</label><input id="weight" type="number" min="0" step="0.1" placeholder="e.g. 60"></div>
+      <div><label for="sweatRate">Sweat rate (L/h)</label><input id="sweatRate" type="number" min="0" step="0.05" placeholder="from sweat test"></div>
+      <div><label for="sweatNa">Sweat sodium (mg/L)</label><input id="sweatNa" type="number" min="0" step="50" value="800"></div>
+      <div><label for="caffKm">Caffeine from (km)</label><input id="caffKm" type="number" min="0" step="1" placeholder="halfway"></div>
+    </div>
+    <p class="hint">Sweat sodium varies a lot between people (roughly 400–1,500 mg/L). 800 is a middle guess; a sweat test at a sports clinic gives her real number. Everything here stays on this phone.</p>
+
+    <details class="sweat-test">
+      <summary>Sweat test calculator</summary>
+      <p class="hint">Weigh in minimal clothing, run for about an hour at race effort in similar weather, towel off, weigh again. Note anything she drank.</p>
+      <div class="grid">
+        <div><label for="stBefore">Weight before (kg)</label><input id="stBefore" type="number" step="0.1"></div>
+        <div><label for="stAfter">Weight after (kg)</label><input id="stAfter" type="number" step="0.1"></div>
+        <div><label for="stDrank">Drank during (ml)</label><input id="stDrank" type="number" step="50" value="0"></div>
+        <div><label for="stMin">Run length (min)</label><input id="stMin" type="number" step="5" value="60"></div>
+      </div>
+      <p id="stResult" class="stats"></p>
+      <div class="row-actions"><button class="ghost" id="stUse" type="button" disabled>Use this sweat rate</button></div>
+    </details>
+
+    <h3>Her products</h3>
+    <div id="products" class="products"></div>
+    <div class="row-actions">
+      <button class="ghost" type="button" data-add="gel">+ Gel</button>
+      <button class="ghost" type="button" data-add="drink">+ Drink mix</button>
+      <button class="ghost" type="button" data-add="salt">+ Salt tab</button>
+      <button class="ghost" type="button" data-add="chew">+ Chews</button>
+      <button class="ghost" type="button" data-add="food">+ Food</button>
+    </div>
+    <p class="hint">Copy the numbers from each packet, per serving. Drink mix: the water one serving is mixed into. The plan fills fluid with the drink mix first, tops up carbs with gels, chews and food in rotation, then tops up sodium with salt tabs.</p>
+  </section>
+
   <section class="card" id="planCard" hidden>
     <h2>Race-day plan</h2>
     <p class="crew-only" id="crewHeader"></p>
     <div id="summary" class="stats"></div>
+    <div id="warnings"></div>
     <div class="table-wrap"><table id="plan"></table></div>
+    <div id="shopping"></div>
     <div class="row-actions no-print">
       <button id="print" type="button">Print crew sheet</button>
     </div>
@@ -138,13 +195,14 @@
   var profile = null;
   var gpxText = null;
   var checkpoints = [];
+  var products = [];
+  var FIELDS = ['target', 'start', 'finishCutoff', 'fatigue', 'carbs', 'fluid', 'weight', 'sweatRate', 'sweatNa', 'caffKm'];
 
   function save() {
     try {
       localStorage.setItem(STORE, JSON.stringify({
-        target: $('target').value, start: $('start').value, finishCutoff: $('finishCutoff').value,
-        fatigue: $('fatigue').value, carbs: $('carbs').value, fluid: $('fluid').value,
-        checkpoints: checkpoints, gpx: gpxText, eleCache: eleCache
+        fields: FIELDS.reduce(function (o, k) { o[k] = $(k).value; return o; }, {}),
+        checkpoints: checkpoints, products: products, gpx: gpxText, eleCache: eleCache
       }));
     } catch (e) { /* storage full or blocked: the app still works */ }
   }
@@ -153,9 +211,9 @@
     var s = null;
     try { s = JSON.parse(localStorage.getItem(STORE) || 'null'); } catch (e) {}
     if (!s) return;
-    ['target', 'start', 'finishCutoff', 'fatigue', 'carbs', 'fluid'].forEach(function (k) {
-      if (s[k] != null) $(k).value = s[k];
-    });
+    var f = s.fields || s;   // older saves kept fields at the top level
+    FIELDS.forEach(function (k) { if (f[k] != null) $(k).value = f[k]; });
+    products = Array.isArray(s.products) ? s.products : [];
     checkpoints = Array.isArray(s.checkpoints) ? s.checkpoints : [];
     if (s.gpx) useGPX(s.gpx, s.eleCache);
   }
@@ -303,11 +361,86 @@
   });
   $('clearCp').addEventListener('click', function () { checkpoints = []; save(); render(); });
 
-  ['target', 'start', 'finishCutoff', 'fatigue', 'carbs', 'fluid'].forEach(function (id) {
+  FIELDS.forEach(function (id) {
     $(id).addEventListener('input', function () { save(); renderPlan(); });
   });
 
   $('print').addEventListener('click', function () { window.print(); });
+
+  var KIND_LABEL = { gel: 'Gel', drink: 'Drink mix', salt: 'Salt tab', chew: 'Chews', food: 'Food' };
+
+  function renderProducts() {
+    var box = $('products');
+    box.innerHTML = '';
+    if (!products.length) {
+      box.innerHTML = '<p class="hint">No products yet. Add what she actually uses in training.</p>';
+      return;
+    }
+    products.forEach(function (p, i) {
+      var el = document.createElement('div');
+      el.className = 'product' + (p.use ? '' : ' off');
+      var kinds = Object.keys(KIND_LABEL).map(function (k) {
+        return '<option value="' + k + '"' + (k === p.kind ? ' selected' : '') + '>' + KIND_LABEL[k] + '</option>';
+      }).join('');
+      el.innerHTML =
+        '<div><label>Name</label><input data-k="name" value="' + esc(p.name) + '" placeholder="e.g. brand and flavour"></div>' +
+        '<div><label>Type</label><select data-k="kind">' + kinds + '</select></div>' +
+        '<div class="nums">' +
+          '<div><label>Carbs (g)</label><input data-k="carbs" type="number" min="0" step="1" value="' + (p.carbs || '') + '"></div>' +
+          '<div><label>Sodium (mg)</label><input data-k="sodium" type="number" min="0" step="5" value="' + (p.sodium || '') + '"></div>' +
+          '<div><label>Caffeine (mg)</label><input data-k="caffeine" type="number" min="0" step="5" value="' + (p.caffeine || '') + '"></div>' +
+          (p.kind === 'drink' ? '<div><label>Mixed in (ml)</label><input data-k="ml" type="number" min="0" step="50" value="' + (p.ml || '') + '"></div>' : '<div></div>') +
+        '</div>' +
+        '<div class="foot"><label><input type="checkbox" data-k="use"' + (p.use ? ' checked' : '') + '> Use in race plan</label>' +
+        '<button class="x" type="button" aria-label="Remove product">✕</button></div>';
+      el.querySelectorAll('input, select').forEach(function (inp) {
+        inp.addEventListener('change', function () {
+          var k = inp.dataset.k;
+          if (k === 'use') p.use = inp.checked;
+          else if (k === 'name' || k === 'kind') p[k] = inp.value;
+          else p[k] = parseFloat(inp.value) || 0;
+          save();
+          if (k === 'kind' || k === 'use') renderProducts();
+          renderPlan();
+        });
+      });
+      el.querySelector('button').addEventListener('click', function () {
+        products.splice(i, 1); save(); renderProducts(); renderPlan();
+      });
+      box.appendChild(el);
+    });
+  }
+
+  document.querySelectorAll('[data-add]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var kind = b.dataset.add;
+      products.push({ name: '', kind: kind, carbs: 0, sodium: 0, caffeine: 0, ml: kind === 'drink' ? 500 : 0, use: true });
+      save(); renderProducts(); renderPlan();
+      var inputs = $('products').querySelectorAll('input[data-k="name"]');
+      if (inputs.length) inputs[inputs.length - 1].focus();
+    });
+  });
+
+  var stRate = null;
+  function updateSweatTest() {
+    var before = parseFloat($('stBefore').value), after = parseFloat($('stAfter').value);
+    stRate = P.sweatRate(before, after, parseFloat($('stDrank').value) || 0, parseFloat($('stMin').value));
+    if (stRate == null) {
+      $('stResult').innerHTML = '<span class="hint">Fill in both weights and the run length.</span>';
+    } else {
+      var lossPct = (before - after) / before * 100;
+      $('stResult').innerHTML = '<span>Sweat rate <b>' + stRate.toFixed(2) + ' L/h</b></span>' +
+        '<span>Body weight change <b>' + (lossPct > 0 ? '−' : '+') + Math.abs(lossPct).toFixed(1) + '%</b></span>';
+    }
+    $('stUse').disabled = stRate == null;
+  }
+  ['stBefore', 'stAfter', 'stDrank', 'stMin'].forEach(function (id) { $(id).addEventListener('input', updateSweatTest); });
+  $('stUse').addEventListener('click', function () {
+    if (stRate == null) return;
+    $('sweatRate').value = stRate.toFixed(2);
+    if (!$('weight').value && $('stBefore').value) $('weight').value = $('stBefore').value;
+    save(); renderPlan();
+  });
 
   function renderChart() {
     var card = $('chartCard');
@@ -380,15 +513,40 @@
       '<span>Average <b>' + P.fmtPace(plan.movingMin / plan.totalKm) + '/km</b> moving</span>' +
       '<span>Stops <b>' + Math.round(plan.stopsMin) + ' min</b></span>' +
       '<span>Fuel <b>' + totalCarbs + ' g</b> carbs, <b>' + (totalFluid / 1000).toFixed(1) + ' L</b></span>';
+    var fuelOpts = {
+      carbsPerHour: parseFloat($('carbs').value) || 0,
+      fluidPerHour: parseFloat($('fluid').value) || 0,
+      sweatSodium: parseFloat($('sweatNa').value) || 0,
+      sweatRate: parseFloat($('sweatRate').value) || 0,
+      weightKg: parseFloat($('weight').value) || 0,
+      caffeineFromKm: $('caffKm').value === '' ? plan.totalKm / 2 : parseFloat($('caffKm').value) || 0
+    };
+    var fuel = P.computeFuel(plan.rows, fuelOpts, products);
+    var hasProducts = products.some(function (p) { return p.use; });
+    var hasDrink = products.some(function (p) { return p.use && p.kind === 'drink' && p.ml > 0; });
+    $('summary').innerHTML += '<span>Sodium <b>' + Math.round(fuel.sum.needSodium) + ' mg</b> target</span>';
+    $('warnings').innerHTML = fuel.warnings.map(function (w) { return '<div class="warn-box">' + esc(w) + '</div>'; }).join('');
+
     $('crewHeader').textContent = 'Start ' + $('start').value + ' · target ' + $('target').value + ' · finish ' + P.fmtClock(start + target);
 
     var html = '<thead><tr><th>Point</th><th>km</th><th>Arrive</th><th class="hide-sm">Elapsed</th>' +
       '<th class="hide-sm">Leg</th><th class="hide-sm">Climb</th><th>Pace</th><th>Carbs</th>' +
       '<th class="hide-sm">Fluid</th><th>Buffer</th></tr></thead><tbody>';
-    plan.rows.forEach(function (r) {
+    function carryRow(leg, label) {
+      var parts = leg.items.map(function (it) {
+        var p = products[it.index];
+        return P.fmtCount(it.count) + ' ' + esc(p.name || KIND_LABEL[p.kind]) +
+          (p.kind === 'drink' ? ' in ' + Math.round(it.count * p.ml) + ' ml' : '');
+      });
+      if (!hasDrink && leg.need.fluid > 0) parts.push(Math.round(leg.need.fluid / 50) * 50 + ' ml water');
+      return '<tr class="carry"><td colspan="10">' + label + (parts.length ? parts.join(' · ') : 'nothing needed') + '</td></tr>';
+    }
+    if (hasProducts) html += carryRow(fuel.legs[0], 'Start with: ');
+    plan.rows.forEach(function (r, ri) {
       var buf = r.bufferMin == null ? '–' :
         '<span class="' + (r.bufferMin < 20 ? 'warn' : 'ok') + '">' + P.fmtDur(r.bufferMin) + '</span>';
-      html += '<tr><td class="name">' + esc(r.name) + '</td>' +
+      var last = ri === plan.rows.length - 1;
+      html += '<tr' + (hasProducts && !last ? ' class="has-carry"' : '') + '><td class="name">' + esc(r.name) + '</td>' +
         '<td>' + r.km.toFixed(1) + '</td>' +
         '<td class="big">' + P.fmtClock(r.arriveClockMin) + '</td>' +
         '<td class="hide-sm">' + P.fmtDur(r.arriveElapsedMin) + '</td>' +
@@ -398,11 +556,26 @@
         '<td>' + r.carbsG + ' g</td>' +
         '<td class="hide-sm">' + r.fluidMl + ' ml</td>' +
         '<td>' + buf + '</td></tr>';
+      if (hasProducts && ri + 1 < plan.rows.length) html += carryRow(fuel.legs[ri + 1], 'Pick up here for next leg: ');
     });
     $('plan').innerHTML = html + '</tbody>';
+
+    if (hasProducts) {
+      var list = fuel.totals.map(function (n, i) {
+        if (!n) return '';
+        var p = products[i];
+        return '<li>' + Math.ceil(n) + '× ' + esc(p.name || KIND_LABEL[p.kind]) + '</li>';
+      }).join('');
+      $('shopping').innerHTML = '<div class="shop"><h3>Race-day kit list</h3><ul>' + list + '</ul>' +
+        '<p class="hint">Gives ' + Math.round(fuel.sum.carbs) + ' g carbs, ' + Math.round(fuel.sum.sodium) + ' mg sodium' +
+        (fuel.sum.caffeine ? ', ' + Math.round(fuel.sum.caffeine) + ' mg caffeine' : '') +
+        '. Pack one or two spares of each.</p></div>';
+    } else {
+      $('shopping').innerHTML = '<p class="hint no-print">Add her gels and drinks in section 4 to get a carry list for each leg.</p>';
+    }
   }
 
-  function render() { renderCheckpoints(); renderChart(); renderPlan(); }
+  function render() { renderCheckpoints(); renderProducts(); renderChart(); renderPlan(); }
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (ch) {
