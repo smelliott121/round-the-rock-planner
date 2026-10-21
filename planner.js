@@ -156,6 +156,42 @@
     return { rows: rows, movingMin: moving, stopsMin: stops, totalKm: total };
   }
 
+  // Pick points along the course to look up elevation for (GPX files without <ele>).
+  function elevationSamples(profile, everyKm) {
+    var stride = Math.max(1, Math.round((everyKm || 0.2) / STEP_KM));
+    var idx = [];
+    for (var i = 0; i < profile.dist.length; i += stride) idx.push(i);
+    if (idx[idx.length - 1] !== profile.dist.length - 1) idx.push(profile.dist.length - 1);
+    return {
+      idx: idx,
+      lat: idx.map(function (i) { return +profile.lat[i].toFixed(5); }),
+      lon: idx.map(function (i) { return +profile.lon[i].toFixed(5); })
+    };
+  }
+
+  // Fill the profile's elevation from looked-up samples, smooth, and recompute climb.
+  function applyElevation(profile, idx, ele) {
+    if (!idx || !ele || idx.length !== ele.length || idx.length < 2) throw new Error('Elevation lookup came back incomplete.');
+    var filled = new Array(profile.dist.length);
+    for (var s = 0; s < idx.length - 1; s++) {
+      var i0 = idx[s], i1 = idx[s + 1];
+      var e0 = Math.max(0, +ele[s] || 0), e1 = Math.max(0, +ele[s + 1] || 0);
+      for (var i = i0; i <= i1; i++) filled[i] = e0 + (i1 > i0 ? (i - i0) / (i1 - i0) : 0) * (e1 - e0);
+    }
+    // Wider smoothing (500 m) than for GPS heights: the elevation model is 90 m grid data.
+    var smooth = filled.map(function (_, i) {
+      var sum = 0, c = 0;
+      for (var k = Math.max(0, i - 2); k <= Math.min(filled.length - 1, i + 2); k++) { sum += filled[k]; c++; }
+      return sum / c;
+    });
+    var climb = climbBetween({ ele: smooth }, 0, smooth.length - 1);
+    return {
+      dist: profile.dist, ele: smooth, lat: profile.lat, lon: profile.lon,
+      totalKm: profile.totalKm, ascent: climb.up, descent: climb.down,
+      hasEle: true, eleSource: 'dem'
+    };
+  }
+
   function fmtDur(min) {
     var neg = min < 0; min = Math.abs(Math.round(min));
     var s = Math.floor(min / 60) + ':' + String(min % 60).padStart(2, '0');
@@ -176,7 +212,7 @@
 
   var api = {
     parseGPX: parseGPX, buildProfile: buildProfile, computePlan: computePlan,
-    gradeCost: gradeCost, fmtDur: fmtDur, fmtClock: fmtClock, fmtPace: fmtPace,
+    gradeCost: gradeCost, elevationSamples: elevationSamples, applyElevation: applyElevation, fmtDur: fmtDur, fmtClock: fmtClock, fmtPace: fmtPace,
     parseHM: parseHM, STEP_KM: STEP_KM
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

@@ -19,6 +19,7 @@
     }
   }
   * { box-sizing: border-box; }
+  a { color: var(--accent); }
   body { margin: 0; background: var(--bg); color: var(--ink);
     font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
   main { max-width: 860px; margin: 0 auto; padding: 20px 16px 48px; }
@@ -124,6 +125,7 @@
   </section>
 
   <p id="msg" class="error"></p>
+  <p class="hint no-print">Elevation for GPX files without heights: <a href="https://open-meteo.com/">Open-Meteo</a>, using the Copernicus DEM GLO-90 (<a href="https://doi.org/10.5270/ESA-c5d3d65">doi:10.5270/ESA-c5d3d65</a>), produced using Copernicus data.</p>
 </main>
 
 <script src="planner.js"></script>
@@ -142,7 +144,7 @@
       localStorage.setItem(STORE, JSON.stringify({
         target: $('target').value, start: $('start').value, finishCutoff: $('finishCutoff').value,
         fatigue: $('fatigue').value, carbs: $('carbs').value, fluid: $('fluid').value,
-        checkpoints: checkpoints, gpx: gpxText
+        checkpoints: checkpoints, gpx: gpxText, eleCache: eleCache
       }));
     } catch (e) { /* storage full or blocked: the app still works */ }
   }
@@ -155,24 +157,83 @@
       if (s[k] != null) $(k).value = s[k];
     });
     checkpoints = Array.isArray(s.checkpoints) ? s.checkpoints : [];
-    if (s.gpx) useGPX(s.gpx);
+    if (s.gpx) useGPX(s.gpx, s.eleCache);
   }
 
-  function useGPX(text) {
+  var eleCache = null;   // { n, idx, ele } looked-up heights for a GPX without <ele>
+  var lookupId = 0;
+
+  function showCourseStats(note) {
+    if (!profile) { $('courseStats').innerHTML = ''; return; }
+    $('courseStats').innerHTML =
+      '<span><b>' + profile.totalKm.toFixed(1) + ' km</b></span>' +
+      '<span><b>+' + Math.round(profile.ascent) + ' m</b> climb</span>' +
+      '<span><b>−' + Math.round(profile.descent) + ' m</b> descent</span>' +
+      (note ? '<span>' + note + '</span>' : '');
+  }
+
+  function useGPX(text, cached) {
+    var myId = ++lookupId;
     try {
       profile = P.buildProfile(P.parseGPX(text));
       gpxText = text;
       $('msg').textContent = '';
-      $('courseStats').innerHTML =
-        '<span><b>' + profile.totalKm.toFixed(1) + ' km</b></span>' +
-        '<span><b>+' + Math.round(profile.ascent) + ' m</b> climb</span>' +
-        '<span><b>−' + Math.round(profile.descent) + ' m</b> descent</span>' +
-        (profile.hasEle ? '' : '<span class="error">No elevation in this file, so splits are flat-paced.</span>');
     } catch (e) {
       profile = null;
       $('msg').textContent = e.message;
+      showCourseStats();
+      render();
+      return;
     }
+    if (profile.hasEle) {
+      eleCache = null;
+      showCourseStats();
+      render();
+      return;
+    }
+    // No heights in the file: use saved lookups if they match, otherwise fetch them.
+    if (cached && cached.n === profile.dist.length) {
+      try {
+        profile = P.applyElevation(profile, cached.idx, cached.ele);
+        eleCache = cached;
+        showCourseStats('Elevation from terrain data');
+        render();
+        return;
+      } catch (e) { /* fall through to a fresh lookup */ }
+    }
+    showCourseStats('<span class="hint">Looking up elevation…</span>');
     render();
+    lookupElevation(profile).then(function (res) {
+      if (myId !== lookupId) return;             // a newer file was loaded meanwhile
+      profile = P.applyElevation(profile, res.idx, res.ele);
+      eleCache = { n: profile.dist.length, idx: res.idx, ele: res.ele };
+      showCourseStats('Elevation from terrain data');
+      save();
+      render();
+    }).catch(function () {
+      if (myId !== lookupId) return;
+      showCourseStats('<span class="error">Couldn\'t look up elevation (check your connection), so splits are flat-paced. Reload the file to try again.</span>');
+    });
+  }
+
+  function lookupElevation(prof) {
+    var s = P.elevationSamples(prof, 0.2);
+    var chunks = [];
+    for (var i = 0; i < s.idx.length; i += 100) chunks.push(i);
+    var out = [];
+    return chunks.reduce(function (p, start) {
+      return p.then(function () {
+        var url = 'https://api.open-meteo.com/v1/elevation?latitude=' + s.lat.slice(start, start + 100).join(',') +
+          '&longitude=' + s.lon.slice(start, start + 100).join(',');
+        return fetch(url).then(function (r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        }).then(function (j) {
+          if (!j || !Array.isArray(j.elevation)) throw new Error('Bad response');
+          out = out.concat(j.elevation);
+        });
+      });
+    }, Promise.resolve()).then(function () { return { idx: s.idx, ele: out }; });
   }
 
   $('gpx').addEventListener('change', function (e) {

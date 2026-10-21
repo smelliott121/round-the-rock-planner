@@ -9,7 +9,7 @@ Load the route GPX, set a target time and the checkpoints, and it gives:
 - **Fuel and fluid per leg**, from carbs per hour and fluid per hour targets.
 - **A printable crew sheet.**
 
-Everything runs in the browser. Nothing is uploaded anywhere, and the plan is saved on the device.
+Everything runs in the browser and the plan is saved on the device. If the GPX has no elevation (the FKT file doesn't), the app looks up heights along the route from Open-Meteo (Copernicus DEM, 90 m); only the route coordinates are sent.
 
 ## Use it
 
