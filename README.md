@@ -1,51 +1,44 @@
-# Round the Rock Planner
+# Lucy's Race Planner
 
-A pacing, fuelling and crew planner for trail ultras, built for Round the Rock, the 48-mile lap of Jersey.
+A map-first training and race app for the 2027 London Marathon and Round the Rock, the 48-mile lap of Jersey. It installs to a phone's home screen and works offline.
 
-Load the route GPX, set a target time and the checkpoints, and it gives:
+**Live:** https://smelliott121.github.io/round-the-rock-planner/
 
-- **Elevation-adjusted splits.** Climbs cost more time, gentle descents a little less, so the plan isn't a flat average pace.
-- **Arrival times** at every checkpoint, plus the buffer against each cutoff (red under 20 minutes).
-- **Fuel and fluid per leg**, from carbs per hour and fluid per hour targets.
-- **Her own products.** Enter gels, drink mix, salt tabs, chews and food from the packets, and every checkpoint shows exactly what to pick up for the next leg, plus a race-day kit list. Caffeine is saved for the second half by default.
-- **Sweat test calculator.** Weight before and after a run gives sweat rate; sodium is matched to what she drinks using her sweat sodium. The app warns if the fluid target is above sweat rate (hyponatraemia risk) or caffeine is above 3–6 mg/kg.
-- **A printable crew sheet.**
+The map fills the screen. A panel slides up over it (drag the handle, or tap it to open and close), with five tabs along the bottom:
 
-Everything runs in the browser and the plan is saved on the device. If the GPX has no elevation (the FKT file doesn't), the app looks up heights along the route from Open-Meteo (Copernicus DEM, 90 m); only the route coordinates are sent.
+- **Today:** countdowns to each race, the weather where she runs (hourly, wind, sunrise, sunset and daylight left) and tides.
+- **Race:** the Round the Rock plan. Elevation-adjusted splits to an 11-hour target, checkpoints with arrival times on the map, buffers against cutoffs, what to pick up at each checkpoint, a race-day forecast (from 15 days out) and a printable crew sheet. **Sections** picks a stretch of the course (a leg, or the hilliest 10, 15 or 20 km), flies through it in 3D and exports it as GPX.
+- **Run:** makes training routes anywhere. Search a town, use GPS or tap the map, choose a distance, hilly, any or flat, and loop or out-and-back. It tries six directions on real paths and offers the best three, with the weather, a finish-before-dark check and water taps and toilets along the way. Lucy's routes are saved, and any GPX can be imported.
+- **Fuel:** carbs and fluid targets, her own gels, drinks and salt tabs, a sweat test calculator and a gut training log.
+- **Kit:** a race kit checklist and shoe mileage.
 
-## Use it
+Map tools: water taps and toilets, notes pinned to the map (water, crew spot, steep, take care), and 3D or flat view.
 
-Open `index.html` in a browser, or turn on GitHub Pages (Settings → Pages → deploy from `main`) to get a link that works on a phone.
+## Data and privacy
 
-The route GPX is on the Fastest Known Time "Jersey Round" page.
+Everything Lucy enters is stored on her phone only. Outside services see only coordinates or search text:
 
-## 3D course map (`map.html`)
+| What | Service |
+| --- | --- |
+| Map | [OpenFreeMap](https://openfreemap.org/) (© OpenMapTiles, OpenStreetMap contributors) |
+| 3D terrain | [Mapzen Terrain Tiles on AWS](https://registry.opendata.aws/terrain-tiles/) |
+| Heights for routes | [Open-Meteo Elevation](https://open-meteo.com/) (Copernicus DEM GLO-90) |
+| Weather and tides | [Open-Meteo](https://open-meteo.com/) forecast and marine models. Tides are model estimates; check [Jersey Met tide tables](https://m.gov.je/Weather/Tides) for anything safety-critical. |
+| Routing | [FOSSGIS OSRM](https://routing.openstreetmap.de/about.html) foot profile, at most one request per second |
+| Place search | [Nominatim](https://nominatim.openstreetmap.org/), on submit only, cached, at most one request per second ([policy](https://operations.osmfoundation.org/policies/nominatim/)) |
+| Water and toilets | [Overpass API](https://overpass-api.de/), cached for a week |
 
-- The course on a 3D map of Jersey (terrain exaggerated 1.8× so the cliffs read).
-- **Training sections:** pick any stretch by km, a leg between checkpoints, or the hilliest 10/15/20 km, optionally as an out-and-back. Shows distance, climb and a time estimate from her flat training pace.
-- **Fly through** the section at ground level.
-- **Download GPX** of the section, then open it with the COROS app to put it on her watch.
+## Code
 
-Map: [OpenFreeMap](https://openfreemap.org/) (© OpenMapTiles, OpenStreetMap contributors). Terrain: [Mapzen Terrain Tiles on AWS](https://registry.opendata.aws/terrain-tiles/). Library: MapLibre GL JS.
-
-## Plan a run (`routes.html`)
-
-- **Route generator:** set a start (search a town or postcode, use GPS, or tap the map; works anywhere, not just Jersey), a distance and Hilly / Any / Flat, as a loop or out-and-back. It tries six directions on real footpaths and lanes, checks the climb on each, and offers the best three.
-- **Her routes:** save generated routes or import any GPX (a COROS run, Strava, Komoot, AllTrails). View in 3D, fly through, download GPX for the watch.
-
-Place search: [Nominatim](https://nominatim.openstreetmap.org/) (search on submit only, results cached, max one request per second, per its [usage policy](https://operations.osmfoundation.org/policies/nominatim/)). Routing: [FOSSGIS OSRM](https://routing.openstreetmap.de/about.html) foot profile on OpenStreetMap data (kept to one request per second, per their policy). Elevation: Open-Meteo.
+- `index.html`, `css/app.css`: the app shell.
+- `planner.js`: pacing, fuel and section maths (pure functions, testable in Node).
+- `js/app.js`: storage, services, map, sheet, tabs, notes, fly-through.
+- `js/today.js`, `js/race.js`, `js/run.js`, `js/fuel.js`, `js/kit.js`: one file per tab.
+- `sw.js`, `manifest.webmanifest`, `icons/`: install and offline support.
+- `map.html`, `routes.html`: redirects from the earlier versions.
 
 ## How the pacing works
 
-The course is resampled every 100 m. Each step gets an effort weight from Tobler's hiking function, relative to flat ground: a 10% climb costs about 1.4× flat, the quickest gradient is a gentle 5% descent, and steep descents slow down again. A late-race slowdown (default 10%) is added in a straight line from start to finish.
+The course is resampled every 100 m. Each step gets an effort weight from Tobler's hiking function relative to flat ground: a 10% climb costs about 1.4× flat, the quickest gradient is a gentle 5% descent, and steep descents slow down again. A late-race slowdown (default 10%) is added in a straight line from start to finish. The target time, minus checkpoint stops, is shared out in proportion to those weights, so the plan always lands exactly on the target.
 
-The target finish time, minus checkpoint stops, is shared across the course in proportion to those weights, so the plan always lands exactly on the target.
-
-Engine: `planner.js` (pure functions, testable in Node). Interface: `index.html`.
-
-## Ideas for next
-
-- Pull real training data from COROS (self-service OAuth) to calibrate the climb and fatigue factors from her own runs
-- Race-day weather on the course
-- Live crew view with ETA to the next checkpoint
-- London Marathon plan (flat course, even splits)
+Fuel per leg: a drink mix covers the fluid target, gels, chews and food top up carbs in turn, and salt tabs top up sodium to match fluid × sweat sodium. Caffeine products are held back until a chosen km (default halfway). The app warns if fluid is above sweat rate (hyponatraemia risk) or caffeine is above 3–6 mg/kg.

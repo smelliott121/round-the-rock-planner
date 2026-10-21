@@ -2,591 +2,333 @@
 <html lang="en-GB">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Lucy's Race Planner</title>
-<meta name="description" content="Elevation-adjusted pacing, fuelling and crew plan for a trail ultra.">
-<style>
-  :root {
-    --bg: #f6f3ee; --card: #ffffff; --ink: #1d2421; --muted: #5f6b66; --line: #ddd6cb;
-    --accent: #0f6b5c; --accent-ink: #ffffff; --sea: #2c6e8f; --warn: #b4441f; --ok: #2e7d32;
-    --chart-fill: rgba(15, 107, 92, 0.16);
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #121614; --card: #1b201e; --ink: #e8ece9; --muted: #9aa7a1; --line: #2e3532;
-      --accent: #4fbfa8; --accent-ink: #0d1412; --sea: #6fb3d6; --warn: #ef8a62; --ok: #7bc77f;
-      --chart-fill: rgba(79, 191, 168, 0.18);
-    }
-  }
-  * { box-sizing: border-box; }
-  a { color: var(--accent); }
-  body { margin: 0; background: var(--bg); color: var(--ink);
-    font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-  main { max-width: 860px; margin: 0 auto; padding: 20px 16px 48px; }
-  h1 { font-size: 1.6rem; margin: 0 0 4px; letter-spacing: -0.01em; }
-  .sub { color: var(--muted); margin: 0 0 20px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
-  h2 { font-size: 1.05rem; margin: 0 0 12px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
-  label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
-  input { width: 100%; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
-    border-radius: 8px; padding: 8px 10px; }
-  input[type=file] { padding: 6px; }
-  button { font: inherit; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink);
-    border-radius: 8px; padding: 8px 14px; cursor: pointer; }
-  button.ghost { background: transparent; color: var(--accent); }
-  button.x { background: transparent; border: none; color: var(--muted); padding: 4px 8px; font-size: 1.1rem; }
-  .row-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-  .stats { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 10px; color: var(--muted); font-size: 0.9rem; }
-  .stats b { color: var(--ink); }
-  .hint { font-size: 0.85rem; color: var(--muted); margin: 8px 0 0; }
-  .error { color: var(--warn); font-weight: 600; }
-  #chart svg { width: 100%; height: auto; display: block; cursor: crosshair; }
-  .cp-list { display: grid; gap: 8px; }
-  .cp { display: grid; grid-template-columns: 1.6fr 0.8fr 0.7fr 0.9fr auto; gap: 6px; align-items: end; }
-  .cp label { font-size: 0.72rem; }
-  .table-wrap { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
-  th, td { text-align: right; padding: 8px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-  th:first-child, td:first-child { text-align: left; }
-  th { color: var(--muted); font-weight: 600; font-size: 0.78rem; }
-  td.name { font-weight: 600; }
-  .ok { color: var(--ok); } .warn { color: var(--warn); font-weight: 600; }
-  .big { font-size: 1.05rem; font-weight: 700; }
-  .crew-only { display: none; }
-  h3 { font-size: 0.95rem; margin: 18px 0 8px; }
-  select { width: 100%; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
-    border-radius: 8px; padding: 8px 6px; }
-  details.sweat-test { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
-  details.sweat-test summary { cursor: pointer; color: var(--accent); font-weight: 600; }
-  .products { display: grid; gap: 10px; }
-  .product { border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: grid; gap: 8px;
-    grid-template-columns: 2fr 1.2fr; }
-  .product .nums { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-  .product .foot { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: var(--muted); }
-  .product .foot label { display: flex; gap: 6px; align-items: center; margin: 0; font-size: 0.85rem; }
-  .product .foot input { width: auto; }
-  .product label { font-size: 0.72rem; }
-  .product.off { opacity: 0.55; }
-  tr.carry td { text-align: left; white-space: normal; color: var(--muted); font-size: 0.84rem; padding-top: 0; }
-  tr.has-carry td { border-bottom: none; }
-  .warn-box { border: 1px solid var(--warn); border-radius: 10px; padding: 10px 12px; margin: 10px 0; color: var(--warn); font-size: 0.9rem; }
-  .shop { margin-top: 14px; }
-  .shop ul { margin: 6px 0 0; padding-left: 20px; }
-  @media (max-width: 560px) {
-    .product .nums { grid-template-columns: repeat(2, 1fr); }
-    .cp { grid-template-columns: 1fr 0.7fr 0.6fr auto; }
-    .cp .cutoff { grid-column: 1 / 3; }
-    .hide-sm { display: none; }
-    table { font-size: 0.84rem; }
-    th, td { padding: 8px 3px; }
-    .big { font-size: 0.95rem; }
-  }
-  @media print {
-    body { background: #fff; color: #000; font-size: 13pt; }
-    .no-print, .card.inputs, #chart, .sub { display: none !important; }
-    .card { border: none; padding: 0; }
-    .crew-only { display: block; }
-    .hide-sm { display: table-cell !important; }
-    th, td { border-bottom: 1px solid #999; padding: 6px 4px; }
-  }
-</style>
+<meta name="description" content="Race pacing, fuelling, training routes and conditions for London and Round the Rock.">
+<meta name="theme-color" content="#0e5a63">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Lucy's Races">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@500;600&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css">
+<link rel="stylesheet" href="css/app.css">
 </head>
 <body>
-<main>
-  <h1>Lucy's Round the Rock Planner</h1>
-  <p class="sub">Elevation-adjusted splits, fuelling and a crew sheet for race day.</p>
-  <p class="no-print" style="margin:-8px 0 20px"><a href="map.html"><b>3D course map →</b></a> &nbsp;·&nbsp; <a href="routes.html"><b>Plan a training run →</b></a></p>
+<div id="map" role="region" aria-label="Map"></div>
 
-  <section class="card inputs">
-    <h2>1. Course</h2>
-    <label for="gpx">GPX file of the route</label>
-    <input id="gpx" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml">
-    <div id="courseStats" class="stats"></div>
-    <p class="hint">The Round the Rock route GPX is on the Fastest Known Time "Jersey Round" page.</p>
-  </section>
+<div class="map-tools" aria-label="Map tools">
+  <button type="button" id="toolPois" aria-pressed="false" title="Show water taps and toilets" aria-label="Show water taps and toilets">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3s6 6.6 6 11a6 6 0 0 1-12 0c0-4.4 6-11 6-11z"/></svg>
+  </button>
+  <button type="button" id="toolNote" aria-pressed="false" title="Drop a note on the map" aria-label="Drop a note on the map">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6-5.4-6-11a6 6 0 0 1 12 0c0 5.6-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/></svg>
+  </button>
+  <button type="button" id="toolView" title="Switch between 3D and flat view" aria-label="Switch between 3D and flat view">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-9 4 6 3-4 6 7z"/></svg>
+  </button>
+</div>
+<div class="map-banner" id="banner" hidden></div>
 
-  <section class="card" id="chartCard" hidden>
-    <h2>Elevation</h2>
-    <div id="chart"></div>
-    <p class="hint no-print">Tap the profile to drop a checkpoint there.</p>
-  </section>
+<section class="sheet" id="sheet" aria-labelledby="sheetTitle">
+  <div class="sheet-head" id="sheetHead">
+    <div class="grip" aria-hidden="true"></div>
+    <div class="sheet-title"><h1 id="sheetTitle">Today</h1><span class="aside" id="sheetAside"></span></div>
+  </div>
+  <div class="sheet-body" id="sheetBody">
 
-  <section class="card inputs">
-    <h2>2. Race plan</h2>
-    <div class="grid">
-      <div><label for="target">Target finish (h:mm)</label><input id="target" value="11:00" inputmode="numeric"></div>
-      <div><label for="start">Start time</label><input id="start" type="time" value="06:00"></div>
-      <div><label for="finishCutoff">Finish cutoff (clock)</label><input id="finishCutoff" type="time" value="18:00"></div>
-      <div><label for="fatigue">Late-race slowdown (%)</label><input id="fatigue" type="number" min="0" max="50" value="10"></div>
-      <div><label for="carbs">Carbs per hour (g)</label><input id="carbs" type="number" min="0" value="60"></div>
-      <div><label for="fluid">Fluid per hour (ml)</label><input id="fluid" type="number" min="0" step="50" value="500"></div>
-    </div>
-  </section>
-
-  <section class="card inputs">
-    <h2>3. Checkpoints</h2>
-    <div id="cps" class="cp-list"></div>
-    <div class="row-actions">
-      <button class="ghost" id="addCp" type="button">Add checkpoint</button>
-      <button class="ghost" id="autoCp" type="button">Every 10 km</button>
-      <button class="ghost" id="clearCp" type="button">Clear</button>
-    </div>
-    <p class="hint">Use the official checkpoint distances and cutoffs from the race info once they're out.</p>
-  </section>
-
-  <section class="card inputs">
-    <h2>4. Fuel &amp; body</h2>
-    <div class="grid">
-      <div><label for="weight">Body weight (kg)</label><input id="weight" type="number" min="0" step="0.1" placeholder="e.g. 60"></div>
-      <div><label for="sweatRate">Sweat rate (L/h)</label><input id="sweatRate" type="number" min="0" step="0.05" placeholder="from sweat test"></div>
-      <div><label for="sweatNa">Sweat sodium (mg/L)</label><input id="sweatNa" type="number" min="0" step="50" value="800"></div>
-      <div><label for="caffKm">Caffeine from (km)</label><input id="caffKm" type="number" min="0" step="1" placeholder="halfway"></div>
-    </div>
-    <p class="hint">Sweat sodium varies a lot between people (roughly 400–1,500 mg/L). 800 is a middle guess; a sweat test at a sports clinic gives your real number. Everything here stays on this phone.</p>
-
-    <details class="sweat-test">
-      <summary>Sweat test calculator</summary>
-      <p class="hint">Weigh in minimal clothing, run for about an hour at race effort in similar weather, towel off, weigh again. Note anything you drank.</p>
-      <div class="grid">
-        <div><label for="stBefore">Weight before (kg)</label><input id="stBefore" type="number" step="0.1"></div>
-        <div><label for="stAfter">Weight after (kg)</label><input id="stAfter" type="number" step="0.1"></div>
-        <div><label for="stDrank">Drank during (ml)</label><input id="stDrank" type="number" step="50" value="0"></div>
-        <div><label for="stMin">Run length (min)</label><input id="stMin" type="number" step="5" value="60"></div>
+    <!-- ================= TODAY ================= -->
+    <div class="panel" id="p-today" role="tabpanel">
+      <div class="section">
+        <div id="countdowns"></div>
+        <details id="raceEdit" class="field">
+          <summary class="hint">Change race dates</summary>
+          <div id="raceEditList"></div>
+          <div class="actions"><button type="button" class="btn quiet" id="addRace">Add a race</button></div>
+        </details>
       </div>
-      <p id="stResult" class="stats"></p>
-      <div class="row-actions"><button class="ghost" id="stUse" type="button" disabled>Use this sweat rate</button></div>
-    </details>
-
-    <h3>Lucy's products</h3>
-    <div id="products" class="products"></div>
-    <div class="row-actions">
-      <button class="ghost" type="button" data-add="gel">+ Gel</button>
-      <button class="ghost" type="button" data-add="drink">+ Drink mix</button>
-      <button class="ghost" type="button" data-add="salt">+ Salt tab</button>
-      <button class="ghost" type="button" data-add="chew">+ Chews</button>
-      <button class="ghost" type="button" data-add="food">+ Food</button>
+      <div class="section">
+        <h2 id="wxPlace">Conditions</h2>
+        <div id="wxNow"><p class="hint">Loading the forecast…</p></div>
+        <div class="hours" id="wxHours"></div>
+        <div class="stats" id="wxDay"></div>
+      </div>
+      <div class="section" id="tideSection" hidden>
+        <h2>Tides</h2>
+        <div class="stats" id="tideList"></div>
+        <div class="tides" id="tideChart"></div>
+        <p class="hint">Estimated from a sea model, so times can be out by half an hour or more around Jersey's coast. Check the <a href="https://m.gov.je/Weather/Tides" target="_blank" rel="noopener">Jersey Met tide tables</a> before relying on a beach or causeway.</p>
+      </div>
+      <p class="hint">Weather and tides from <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>. The forecast is for the start of your last planned run, or Jersey if you haven't planned one.</p>
     </div>
-    <p class="hint">Copy the numbers from each packet, per serving. Drink mix: the water one serving is mixed into. The plan fills fluid with the drink mix first, tops up carbs with gels, chews and food in rotation, then tops up sodium with salt tabs.</p>
-  </section>
 
-  <section class="card" id="planCard" hidden>
-    <h2>Race-day plan</h2>
-    <p class="crew-only" id="crewHeader"></p>
-    <div id="summary" class="stats"></div>
-    <div id="warnings"></div>
-    <div class="table-wrap"><table id="plan"></table></div>
-    <div id="shopping"></div>
-    <div class="row-actions no-print">
-      <button id="print" type="button">Print crew sheet</button>
+    <!-- ================= RACE ================= -->
+    <div class="panel" id="p-race" role="tabpanel">
+      <div id="raceEmpty" class="section" hidden>
+        <h2>Load the course</h2>
+        <p>Add the route GPX to plan splits, checkpoints and fuel.</p>
+        <label for="gpx">Course GPX</label>
+        <input id="gpx" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml">
+        <p class="hint">The Round the Rock route is on the Fastest Known Time "Jersey Round" page.</p>
+      </div>
+
+      <div id="raceMain" hidden>
+        <div class="seg subnav" id="raceNav">
+          <button type="button" data-v="plan">Plan</button>
+          <button type="button" data-v="cps">Checkpoints</button>
+          <button type="button" data-v="sections">Sections</button>
+        </div>
+
+        <div class="sub" data-sub="plan">
+          <div class="stats" id="courseStats"></div>
+          <div class="profile tap" id="raceProfile"></div>
+          <p class="hint">Tap the profile to add a checkpoint there.</p>
+          <div class="grid field">
+            <div><label for="target">Target finish (h:mm)</label><input id="target" value="11:00" inputmode="numeric"></div>
+            <div><label for="start">Start time</label><input id="start" type="time" value="06:00"></div>
+            <div><label for="finishCutoff">Finish cutoff</label><input id="finishCutoff" type="time" value="18:00"></div>
+            <div><label for="fatigue">Late-race slowdown (%)</label><input id="fatigue" type="number" min="0" max="50" value="10"></div>
+          </div>
+          <div id="raceWx"></div>
+          <h2>Race-day plan</h2>
+          <div class="stats" id="summary"></div>
+          <div id="warnings"></div>
+          <div class="table-wrap"><table id="plan"></table></div>
+          <div id="shopping"></div>
+          <div class="actions">
+            <button type="button" class="btn" id="print">Print crew sheet</button>
+          </div>
+          <details class="field">
+            <summary class="hint">Change course file</summary>
+            <input id="gpx2" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" aria-label="Replace course GPX">
+          </details>
+        </div>
+
+        <div class="sub" data-sub="cps" hidden>
+          <div id="cps"></div>
+          <div class="actions">
+            <button type="button" class="btn quiet" id="addCp">Add checkpoint</button>
+            <button type="button" class="btn quiet" id="autoCp">Every 10 km</button>
+            <button type="button" class="btn quiet" id="clearCp">Clear all</button>
+          </div>
+          <p class="hint">Swap in the official distances and cutoffs once the 2027 race info is out.</p>
+        </div>
+
+        <div class="sub" data-sub="sections" hidden>
+          <p class="hint">Pick a stretch of the course to train on, then fly through it or send it to your watch.</p>
+          <div class="chips field" id="presets"></div>
+          <div class="grid">
+            <div><label for="secFrom">From (km)</label><input id="secFrom" type="number" step="0.1" min="0"></div>
+            <div><label for="secTo">To (km)</label><input id="secTo" type="number" step="0.1" min="0"></div>
+            <div><label for="secPace">Flat pace (/km)</label><input id="secPace" value="6:30" inputmode="numeric"></div>
+          </div>
+          <input id="secFromR" type="range" step="0.1" min="0" aria-label="Section start">
+          <input id="secToR" type="range" step="0.1" min="0" aria-label="Section end">
+          <label class="check"><input id="secOab" type="checkbox"> Out and back</label>
+          <div class="stats" id="secStats"></div>
+          <div class="profile" id="secProfile"></div>
+          <div class="actions">
+            <button type="button" class="btn" id="secFly">Fly through</button>
+            <button type="button" class="btn quiet" id="secGpx">Download GPX</button>
+          </div>
+        </div>
+      </div>
     </div>
-  </section>
 
-  <p id="msg" class="error"></p>
-  <p class="hint no-print">Elevation for GPX files without heights: <a href="https://open-meteo.com/">Open-Meteo</a>, using the Copernicus DEM GLO-90 (<a href="https://doi.org/10.5270/ESA-c5d3d65">doi:10.5270/ESA-c5d3d65</a>), produced using Copernicus data.</p>
-</main>
+    <!-- ================= RUN ================= -->
+    <div class="panel" id="p-run" role="tabpanel">
+      <div class="seg subnav" id="runNav">
+        <button type="button" data-v="plan">New route</button>
+        <button type="button" data-v="saved">Lucy's routes</button>
+      </div>
 
+      <div class="sub" data-sub="plan">
+        <form id="searchForm" role="search" class="field" style="display:flex;gap:8px">
+          <input id="place" type="search" placeholder="Town or postcode, e.g. Canterbury, Kent" autocomplete="off" aria-label="Search for a place">
+          <button type="submit" class="btn" id="findBtn">Find</button>
+        </form>
+        <div class="picks" id="places"></div>
+        <div class="actions">
+          <button type="button" class="btn quiet" id="locate">Start from my location</button>
+        </div>
+        <p class="hint" id="startInfo">Or tap the map to set where you'll start.</p>
+        <div class="grid field">
+          <div><label for="genKm">Distance (km)</label><input id="genKm" type="number" min="3" max="50" step="1" value="15"></div>
+          <div><label for="genPace">Flat pace (/km)</label><input id="genPace" value="6:30" inputmode="numeric"></div>
+        </div>
+        <div class="field"><label>Terrain</label>
+          <div class="seg" id="genTerrain">
+            <button type="button" data-v="hilly">Hilly</button><button type="button" data-v="rolling">Any</button><button type="button" data-v="flat">Flat</button>
+          </div>
+        </div>
+        <div class="field"><label>Shape</label>
+          <div class="seg" id="genShape">
+            <button type="button" data-v="loop">Loop</button><button type="button" data-v="oab">Out and back</button>
+          </div>
+        </div>
+        <button type="button" class="btn wide" id="go" disabled>Make routes</button>
+        <p class="hint" id="progress" aria-live="polite"></p>
+        <div class="picks" id="results"></div>
+      </div>
+
+      <div class="sub" data-sub="saved" hidden>
+        <div class="list" id="lib"></div>
+        <div class="field">
+          <label for="importGpx">Import a GPX (a COROS run, Strava, Komoot, AllTrails)</label>
+          <input id="importGpx" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" multiple>
+        </div>
+        <p class="hint">Saved on this phone only.</p>
+      </div>
+
+      <div id="routeDetail" class="section" hidden>
+        <h2 id="rdTitle">Route</h2>
+        <div class="stats" id="rdStats"></div>
+        <div id="rdConditions"></div>
+        <div id="rdPois"></div>
+        <div class="profile" id="rdProfile"></div>
+        <div class="actions">
+          <button type="button" class="btn" id="rdFly">Fly through</button>
+          <button type="button" class="btn quiet" id="rdGpx">Download GPX</button>
+        </div>
+        <div class="grid field">
+          <div><label for="rdName">Name</label><input id="rdName"></div>
+        </div>
+        <div class="actions"><button type="button" class="btn quiet" id="rdSave">Save to Lucy's routes</button></div>
+        <p class="hint">Download the GPX, open it with the COROS app and save it as a route to follow on your watch.</p>
+      </div>
+      <p class="hint">Routes follow paths and lanes from OpenStreetMap via the <a href="https://routing.openstreetmap.de/about.html" target="_blank" rel="noopener">FOSSGIS routing server</a>. Check a new route looks sensible before heading out, and <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener">fix the map</a> if a path is wrong. Place search by <a href="https://nominatim.openstreetmap.org/" target="_blank" rel="noopener">Nominatim</a> under its <a href="https://operations.osmfoundation.org/policies/nominatim/" target="_blank" rel="noopener">usage policy</a>.</p>
+    </div>
+
+    <!-- ================= FUEL ================= -->
+    <div class="panel" id="p-fuel" role="tabpanel">
+      <div class="seg subnav" id="fuelNav">
+        <button type="button" data-v="race">Race fuel</button>
+        <button type="button" data-v="sweat">Sweat test</button>
+        <button type="button" data-v="gut">Gut training</button>
+      </div>
+
+      <div class="sub" data-sub="race">
+        <div class="grid field">
+          <div><label for="carbs">Carbs per hour (g)</label><input id="carbs" type="number" min="0" value="60"></div>
+          <div><label for="fluid">Fluid per hour (ml)</label><input id="fluid" type="number" min="0" step="50" value="500"></div>
+          <div><label for="weight">Body weight (kg)</label><input id="weight" type="number" min="0" step="0.1" placeholder="e.g. 60"></div>
+          <div><label for="sweatRate">Sweat rate (L/h)</label><input id="sweatRate" type="number" min="0" step="0.05" placeholder="from sweat test"></div>
+          <div><label for="sweatNa">Sweat sodium (mg/L)</label><input id="sweatNa" type="number" min="0" step="50" value="800"></div>
+          <div><label for="caffKm">Caffeine from (km)</label><input id="caffKm" type="number" min="0" step="1" placeholder="halfway"></div>
+        </div>
+        <p class="hint">Sweat sodium varies a lot between people (roughly 400–1,500 mg/L). 800 is a middle guess; a sweat test at a sports clinic gives your real number.</p>
+        <h2>Lucy's products</h2>
+        <div id="products"></div>
+        <div class="chips field">
+          <button type="button" class="chip" data-add="gel">Add gel</button>
+          <button type="button" class="chip" data-add="drink">Add drink mix</button>
+          <button type="button" class="chip" data-add="salt">Add salt tab</button>
+          <button type="button" class="chip" data-add="chew">Add chews</button>
+          <button type="button" class="chip" data-add="food">Add food</button>
+        </div>
+        <p class="hint">Copy the numbers per serving from each packet. For drink mix, add the water one serving goes into. The race plan fills fluid with drink mix first, tops up carbs with gels, chews and food in turn, then sodium with salt tabs.</p>
+      </div>
+
+      <div class="sub" data-sub="sweat" hidden>
+        <p>Weigh in minimal clothing, run for about an hour at race effort in similar weather, towel off and weigh again. Note anything you drank.</p>
+        <div class="grid field">
+          <div><label for="stBefore">Weight before (kg)</label><input id="stBefore" type="number" step="0.1"></div>
+          <div><label for="stAfter">Weight after (kg)</label><input id="stAfter" type="number" step="0.1"></div>
+          <div><label for="stDrank">Drank during (ml)</label><input id="stDrank" type="number" step="50" value="0"></div>
+          <div><label for="stMin">Run length (min)</label><input id="stMin" type="number" step="5" value="60"></div>
+        </div>
+        <div class="stats" id="stResult"></div>
+        <div class="actions"><button type="button" class="btn" id="stUse" disabled>Use this sweat rate</button></div>
+        <p class="hint">Sweat rate goes up in heat, so a test on a warm day is the better guide for July.</p>
+      </div>
+
+      <div class="sub" data-sub="gut" hidden>
+        <p>Log how many carbs you took on long runs and how your stomach felt. The gut adapts with practice, so the aim is to build towards your race target.</p>
+        <div class="grid field">
+          <div><label for="gDate">Date</label><input id="gDate" type="date"></div>
+          <div><label for="gMin">Run length (min)</label><input id="gMin" type="number" min="1" step="5"></div>
+          <div><label for="gCarbs">Carbs taken (g)</label><input id="gCarbs" type="number" min="0" step="5"></div>
+        </div>
+        <div class="field"><label>Stomach</label>
+          <div class="seg" id="gFeel">
+            <button type="button" data-v="0">Fine</button><button type="button" data-v="1">A bit off</button><button type="button" data-v="2">Bad</button>
+          </div>
+        </div>
+        <div class="field"><label for="gNote">Note (optional)</label><input id="gNote" placeholder="e.g. new gel flavour, hot day"></div>
+        <button type="button" class="btn wide" id="gAdd">Log run</button>
+        <div class="profile" id="gChart"></div>
+        <div class="list" id="gList"></div>
+      </div>
+    </div>
+
+    <!-- ================= KIT ================= -->
+    <div class="panel" id="p-kit" role="tabpanel">
+      <div class="seg subnav" id="kitNav">
+        <button type="button" data-v="list">Kit list</button>
+        <button type="button" data-v="shoes">Shoes</button>
+      </div>
+      <div class="sub" data-sub="list">
+        <p class="hint">A starting list for a long coastal trail race. Swap in the race's official mandatory kit when it's published.</p>
+        <div id="kitGroups"></div>
+        <div class="grid field">
+          <div><label for="kitGroup">Add to</label><select id="kitGroup"></select></div>
+          <div><label for="kitText">Item</label><input id="kitText" placeholder="e.g. spare socks"></div>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn" id="kitAdd">Add item</button>
+          <button type="button" class="btn quiet" id="kitReset">Untick everything</button>
+        </div>
+      </div>
+      <div class="sub" data-sub="shoes" hidden>
+        <div class="list" id="shoeList"></div>
+        <h2>Add a pair</h2>
+        <div class="grid">
+          <div><label for="shoeName">Shoe</label><input id="shoeName" placeholder="e.g. trail shoes, red pair"></div>
+          <div><label for="shoeKm">Km so far</label><input id="shoeKm" type="number" min="0" value="0"></div>
+          <div><label for="shoeMax">Retire at (km)</label><input id="shoeMax" type="number" min="100" step="50" value="650"></div>
+        </div>
+        <div class="actions"><button type="button" class="btn" id="shoeAdd">Add shoes</button></div>
+        <p class="hint">Most running shoes lose their cushioning somewhere between 500 and 800 km. Retire them sooner if they feel flat or your legs start to ache.</p>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<nav class="tabbar" role="tablist" aria-label="Sections">
+  <button type="button" role="tab" data-tab="today" aria-controls="p-today">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M4.6 4.6l1.8 1.8M17.6 17.6l1.8 1.8M2.5 12H5M19 12h2.5M4.6 19.4l1.8-1.8M17.6 6.4l1.8-1.8"/></svg>
+    Today</button>
+  <button type="button" role="tab" data-tab="race" aria-controls="p-race">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>
+    Race</button>
+  <button type="button" role="tab" data-tab="run" aria-controls="p-run">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="6" r="2.2"/><path d="M8 17.5c6 0 2-7 8-10"/></svg>
+    Run</button>
+  <button type="button" role="tab" data-tab="fuel" aria-controls="p-fuel">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v3l-3 4v9a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-9l-3-4V3"/><path d="M7 13h10"/></svg>
+    Fuel</button>
+  <button type="button" role="tab" data-tab="kit" aria-controls="p-kit">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7V5a4 4 0 0 1 8 0v2"/><rect x="5" y="7" width="14" height="14" rx="3"/><path d="M9 13h6"/></svg>
+    Kit</button>
+</nav>
+
+<div id="printArea"></div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
 <script src="planner.js"></script>
-<script>
-(function () {
-  'use strict';
-  var P = window.Planner;
-  var $ = function (id) { return document.getElementById(id); };
-  var STORE = 'rtr-planner-v1';
-  var profile = null;
-  var gpxText = null;
-  var checkpoints = [];
-  var products = [];
-  var FIELDS = ['target', 'start', 'finishCutoff', 'fatigue', 'carbs', 'fluid', 'weight', 'sweatRate', 'sweatNa', 'caffKm'];
-
-  function save() {
-    try {
-      localStorage.setItem(STORE, JSON.stringify({
-        fields: FIELDS.reduce(function (o, k) { o[k] = $(k).value; return o; }, {}),
-        checkpoints: checkpoints, products: products, gpx: gpxText, eleCache: eleCache
-      }));
-    } catch (e) { /* storage full or blocked: the app still works */ }
-  }
-
-  function load() {
-    var s = null;
-    try { s = JSON.parse(localStorage.getItem(STORE) || 'null'); } catch (e) {}
-    if (!s) return;
-    var f = s.fields || s;   // older saves kept fields at the top level
-    FIELDS.forEach(function (k) { if (f[k] != null) $(k).value = f[k]; });
-    products = Array.isArray(s.products) ? s.products : [];
-    checkpoints = Array.isArray(s.checkpoints) ? s.checkpoints : [];
-    if (s.gpx) useGPX(s.gpx, s.eleCache);
-  }
-
-  var eleCache = null;   // { n, idx, ele } looked-up heights for a GPX without <ele>
-  var lookupId = 0;
-
-  function showCourseStats(note) {
-    if (!profile) { $('courseStats').innerHTML = ''; return; }
-    $('courseStats').innerHTML =
-      '<span><b>' + profile.totalKm.toFixed(1) + ' km</b></span>' +
-      '<span><b>+' + Math.round(profile.ascent) + ' m</b> climb</span>' +
-      '<span><b>−' + Math.round(profile.descent) + ' m</b> descent</span>' +
-      (note ? '<span>' + note + '</span>' : '');
-  }
-
-  function useGPX(text, cached) {
-    var myId = ++lookupId;
-    try {
-      profile = P.buildProfile(P.parseGPX(text));
-      gpxText = text;
-      $('msg').textContent = '';
-    } catch (e) {
-      profile = null;
-      $('msg').textContent = e.message;
-      showCourseStats();
-      render();
-      return;
-    }
-    if (profile.hasEle) {
-      eleCache = null;
-      showCourseStats();
-      render();
-      return;
-    }
-    // No heights in the file: use saved lookups if they match, otherwise fetch them.
-    if (cached && cached.n === profile.dist.length) {
-      try {
-        profile = P.applyElevation(profile, cached.idx, cached.ele);
-        eleCache = cached;
-        showCourseStats('Elevation from terrain data');
-        render();
-        return;
-      } catch (e) { /* fall through to a fresh lookup */ }
-    }
-    showCourseStats('<span class="hint">Looking up elevation…</span>');
-    render();
-    lookupElevation(profile).then(function (res) {
-      if (myId !== lookupId) return;             // a newer file was loaded meanwhile
-      profile = P.applyElevation(profile, res.idx, res.ele);
-      eleCache = { n: profile.dist.length, idx: res.idx, ele: res.ele };
-      showCourseStats('Elevation from terrain data');
-      save();
-      render();
-    }).catch(function () {
-      if (myId !== lookupId) return;
-      showCourseStats('<span class="error">Couldn\'t look up elevation (check your connection), so splits are flat-paced. Reload the file to try again.</span>');
-    });
-  }
-
-  function lookupElevation(prof) {
-    var s = P.elevationSamples(prof, 0.2);
-    var chunks = [];
-    for (var i = 0; i < s.idx.length; i += 100) chunks.push(i);
-    var out = [];
-    return chunks.reduce(function (p, start) {
-      return p.then(function () {
-        var url = 'https://api.open-meteo.com/v1/elevation?latitude=' + s.lat.slice(start, start + 100).join(',') +
-          '&longitude=' + s.lon.slice(start, start + 100).join(',');
-        return fetch(url).then(function (r) {
-          if (!r.ok) throw new Error('HTTP ' + r.status);
-          return r.json();
-        }).then(function (j) {
-          if (!j || !Array.isArray(j.elevation)) throw new Error('Bad response');
-          out = out.concat(j.elevation);
-        });
-      });
-    }, Promise.resolve()).then(function () { return { idx: s.idx, ele: out }; });
-  }
-
-  $('gpx').addEventListener('change', function (e) {
-    var f = e.target.files[0];
-    if (!f) return;
-    var r = new FileReader();
-    r.onload = function () { useGPX(String(r.result)); save(); };
-    r.readAsText(f);
-  });
-
-  function renderCheckpoints() {
-    var box = $('cps');
-    box.innerHTML = '';
-    if (!checkpoints.length) {
-      box.innerHTML = '<p class="hint">No checkpoints yet.</p>';
-      return;
-    }
-    checkpoints.forEach(function (c, i) {
-      var row = document.createElement('div');
-      row.className = 'cp';
-      row.innerHTML =
-        '<div><label>Name</label><input data-k="name" value="' + esc(c.name) + '"></div>' +
-        '<div><label>km</label><input data-k="km" type="number" step="0.1" value="' + c.km + '"></div>' +
-        '<div><label>Stop (min)</label><input data-k="stopMin" type="number" min="0" value="' + c.stopMin + '"></div>' +
-        '<div class="cutoff"><label>Cutoff</label><input data-k="cutoff" type="time" value="' + (c.cutoff || '') + '"></div>' +
-        '<button class="x" type="button" aria-label="Remove checkpoint">✕</button>';
-      row.querySelectorAll('input').forEach(function (inp) {
-        inp.addEventListener('change', function () {
-          var k = inp.dataset.k;
-          c[k] = (k === 'km' || k === 'stopMin') ? parseFloat(inp.value) || 0 : inp.value;
-          if (k === 'km') sortCps();
-          save(); render();
-        });
-      });
-      row.querySelector('button').addEventListener('click', function () {
-        checkpoints.splice(i, 1); save(); render();
-      });
-      box.appendChild(row);
-    });
-  }
-
-  function sortCps() { checkpoints.sort(function (a, b) { return a.km - b.km; }); }
-
-  function addCp(km) {
-    checkpoints.push({ name: 'Checkpoint ' + (checkpoints.length + 1), km: Math.round(km * 10) / 10, stopMin: 3, cutoff: '' });
-    sortCps(); renumber(); save(); render();
-  }
-
-  function renumber() {
-    checkpoints.forEach(function (c, i) {
-      if (/^Checkpoint \d+$/.test(c.name)) c.name = 'Checkpoint ' + (i + 1);
-    });
-  }
-
-  $('addCp').addEventListener('click', function () {
-    var last = checkpoints.length ? checkpoints[checkpoints.length - 1].km : 0;
-    var max = profile ? profile.totalKm - 0.5 : 70;
-    addCp(Math.min(max, last + 10));
-  });
-  $('autoCp').addEventListener('click', function () {
-    if (!profile) { $('msg').textContent = 'Load a GPX file first.'; return; }
-    checkpoints = [];
-    for (var km = 10; km < profile.totalKm - 2; km += 10) {
-      checkpoints.push({ name: 'Checkpoint ' + (checkpoints.length + 1), km: km, stopMin: 3, cutoff: '' });
-    }
-    save(); render();
-  });
-  $('clearCp').addEventListener('click', function () { checkpoints = []; save(); render(); });
-
-  FIELDS.forEach(function (id) {
-    $(id).addEventListener('input', function () { save(); renderPlan(); });
-  });
-
-  $('print').addEventListener('click', function () { window.print(); });
-
-  var KIND_LABEL = { gel: 'Gel', drink: 'Drink mix', salt: 'Salt tab', chew: 'Chews', food: 'Food' };
-
-  function renderProducts() {
-    var box = $('products');
-    box.innerHTML = '';
-    if (!products.length) {
-      box.innerHTML = '<p class="hint">No products yet. Add what you actually use in training.</p>';
-      return;
-    }
-    products.forEach(function (p, i) {
-      var el = document.createElement('div');
-      el.className = 'product' + (p.use ? '' : ' off');
-      var kinds = Object.keys(KIND_LABEL).map(function (k) {
-        return '<option value="' + k + '"' + (k === p.kind ? ' selected' : '') + '>' + KIND_LABEL[k] + '</option>';
-      }).join('');
-      el.innerHTML =
-        '<div><label>Name</label><input data-k="name" value="' + esc(p.name) + '" placeholder="e.g. brand and flavour"></div>' +
-        '<div><label>Type</label><select data-k="kind">' + kinds + '</select></div>' +
-        '<div class="nums">' +
-          '<div><label>Carbs (g)</label><input data-k="carbs" type="number" min="0" step="1" value="' + (p.carbs || '') + '"></div>' +
-          '<div><label>Sodium (mg)</label><input data-k="sodium" type="number" min="0" step="5" value="' + (p.sodium || '') + '"></div>' +
-          '<div><label>Caffeine (mg)</label><input data-k="caffeine" type="number" min="0" step="5" value="' + (p.caffeine || '') + '"></div>' +
-          (p.kind === 'drink' ? '<div><label>Mixed in (ml)</label><input data-k="ml" type="number" min="0" step="50" value="' + (p.ml || '') + '"></div>' : '<div></div>') +
-        '</div>' +
-        '<div class="foot"><label><input type="checkbox" data-k="use"' + (p.use ? ' checked' : '') + '> Use in race plan</label>' +
-        '<button class="x" type="button" aria-label="Remove product">✕</button></div>';
-      el.querySelectorAll('input, select').forEach(function (inp) {
-        inp.addEventListener('change', function () {
-          var k = inp.dataset.k;
-          if (k === 'use') p.use = inp.checked;
-          else if (k === 'name' || k === 'kind') p[k] = inp.value;
-          else p[k] = parseFloat(inp.value) || 0;
-          save();
-          if (k === 'kind' || k === 'use') renderProducts();
-          renderPlan();
-        });
-      });
-      el.querySelector('button').addEventListener('click', function () {
-        products.splice(i, 1); save(); renderProducts(); renderPlan();
-      });
-      box.appendChild(el);
-    });
-  }
-
-  document.querySelectorAll('[data-add]').forEach(function (b) {
-    b.addEventListener('click', function () {
-      var kind = b.dataset.add;
-      products.push({ name: '', kind: kind, carbs: 0, sodium: 0, caffeine: 0, ml: kind === 'drink' ? 500 : 0, use: true });
-      save(); renderProducts(); renderPlan();
-      var inputs = $('products').querySelectorAll('input[data-k="name"]');
-      if (inputs.length) inputs[inputs.length - 1].focus();
-    });
-  });
-
-  var stRate = null;
-  function updateSweatTest() {
-    var before = parseFloat($('stBefore').value), after = parseFloat($('stAfter').value);
-    stRate = P.sweatRate(before, after, parseFloat($('stDrank').value) || 0, parseFloat($('stMin').value));
-    if (stRate == null) {
-      $('stResult').innerHTML = '<span class="hint">Fill in both weights and the run length.</span>';
-    } else {
-      var lossPct = (before - after) / before * 100;
-      $('stResult').innerHTML = '<span>Sweat rate <b>' + stRate.toFixed(2) + ' L/h</b></span>' +
-        '<span>Body weight change <b>' + (lossPct > 0 ? '−' : '+') + Math.abs(lossPct).toFixed(1) + '%</b></span>';
-    }
-    $('stUse').disabled = stRate == null;
-  }
-  ['stBefore', 'stAfter', 'stDrank', 'stMin'].forEach(function (id) { $(id).addEventListener('input', updateSweatTest); });
-  $('stUse').addEventListener('click', function () {
-    if (stRate == null) return;
-    $('sweatRate').value = stRate.toFixed(2);
-    if (!$('weight').value && $('stBefore').value) $('weight').value = $('stBefore').value;
-    save(); renderPlan();
-  });
-
-  function renderChart() {
-    var card = $('chartCard');
-    if (!profile) { card.hidden = true; return; }
-    card.hidden = false;
-    var W = 800, H = 220, pad = { l: 36, r: 8, t: 12, b: 24 };
-    var n = profile.dist.length, step = Math.max(1, Math.floor(n / 400));
-    var minE = Math.min.apply(null, profile.ele), maxE = Math.max.apply(null, profile.ele);
-    if (maxE - minE < 20) maxE = minE + 20;
-    var x = function (km) { return pad.l + (km / profile.totalKm) * (W - pad.l - pad.r); };
-    var y = function (e) { return pad.t + (1 - (e - minE) / (maxE - minE)) * (H - pad.t - pad.b); };
-    var d = 'M' + x(0) + ',' + y(profile.ele[0]);
-    for (var i = step; i < n; i += step) d += ' L' + x(profile.dist[i]).toFixed(1) + ',' + y(profile.ele[i]).toFixed(1);
-    d += ' L' + x(profile.totalKm).toFixed(1) + ',' + y(profile.ele[n - 1]).toFixed(1);
-    var area = d + ' L' + x(profile.totalKm) + ',' + (H - pad.b) + ' L' + x(0) + ',' + (H - pad.b) + ' Z';
-
-    var ticks = '';
-    for (var km = 0; km <= profile.totalKm; km += 10) {
-      ticks += '<text x="' + x(km) + '" y="' + (H - 6) + '" text-anchor="middle" font-size="12" fill="var(--muted)">' + km + '</text>';
-    }
-    var marks = checkpoints.map(function (c) {
-      if (c.km <= 0 || c.km >= profile.totalKm) return '';
-      var xx = x(c.km).toFixed(1);
-      return '<line x1="' + xx + '" x2="' + xx + '" y1="' + pad.t + '" y2="' + (H - pad.b) + '" stroke="var(--sea)" stroke-dasharray="3 3"/>' +
-        '<circle cx="' + xx + '" cy="' + y(profile.ele[Math.round(c.km / P.STEP_KM)] || minE).toFixed(1) + '" r="4" fill="var(--sea)"/>';
-    }).join('');
-
-    $('chart').innerHTML =
-      '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Elevation profile">' +
-      '<path d="' + area + '" fill="var(--chart-fill)"/>' +
-      '<path d="' + d + '" fill="none" stroke="var(--accent)" stroke-width="2"/>' +
-      '<text x="4" y="' + (y(maxE) + 4) + '" font-size="12" fill="var(--muted)">' + Math.round(maxE) + 'm</text>' +
-      '<text x="4" y="' + (y(minE)) + '" font-size="12" fill="var(--muted)">' + Math.round(minE) + 'm</text>' +
-      ticks + marks + '</svg>';
-
-    $('chart').querySelector('svg').addEventListener('click', function (ev) {
-      var r = this.getBoundingClientRect();
-      var px = (ev.clientX - r.left) / r.width * W;
-      var km = (px - pad.l) / (W - pad.l - pad.r) * profile.totalKm;
-      if (km > 0.5 && km < profile.totalKm - 0.5) addCp(km);
-    });
-  }
-
-  function renderPlan() {
-    var card = $('planCard');
-    if (!profile) { card.hidden = true; return; }
-    var target = P.parseHM($('target').value);
-    var start = P.parseHM($('start').value);
-    if (target == null || start == null) { $('msg').textContent = 'Enter the target as h:mm, for example 11:00.'; card.hidden = true; return; }
-    var plan;
-    try {
-      plan = P.computePlan(profile, {
-        targetMin: target, startMin: start,
-        fatigue: (parseFloat($('fatigue').value) || 0) / 100,
-        carbsPerHour: parseFloat($('carbs').value) || 0,
-        fluidPerHour: parseFloat($('fluid').value) || 0,
-        finishCutoffMin: P.parseHM($('finishCutoff').value),
-        checkpoints: checkpoints.map(function (c) {
-          return { name: c.name, km: c.km, stopMin: c.stopMin || 0, cutoffMin: P.parseHM(c.cutoff) };
-        })
-      });
-    } catch (e) { $('msg').textContent = e.message; card.hidden = true; return; }
-    $('msg').textContent = '';
-    card.hidden = false;
-
-    var totalCarbs = plan.rows.reduce(function (s, r) { return s + r.carbsG; }, 0);
-    var totalFluid = plan.rows.reduce(function (s, r) { return s + r.fluidMl; }, 0);
-    $('summary').innerHTML =
-      '<span>Finish <b>' + P.fmtClock(start + target) + '</b></span>' +
-      '<span>Average <b>' + P.fmtPace(plan.movingMin / plan.totalKm) + '/km</b> moving</span>' +
-      '<span>Stops <b>' + Math.round(plan.stopsMin) + ' min</b></span>' +
-      '<span>Fuel <b>' + totalCarbs + ' g</b> carbs, <b>' + (totalFluid / 1000).toFixed(1) + ' L</b></span>';
-    var fuelOpts = {
-      carbsPerHour: parseFloat($('carbs').value) || 0,
-      fluidPerHour: parseFloat($('fluid').value) || 0,
-      sweatSodium: parseFloat($('sweatNa').value) || 0,
-      sweatRate: parseFloat($('sweatRate').value) || 0,
-      weightKg: parseFloat($('weight').value) || 0,
-      caffeineFromKm: $('caffKm').value === '' ? plan.totalKm / 2 : parseFloat($('caffKm').value) || 0
-    };
-    var fuel = P.computeFuel(plan.rows, fuelOpts, products);
-    var hasProducts = products.some(function (p) { return p.use; });
-    var hasDrink = products.some(function (p) { return p.use && p.kind === 'drink' && p.ml > 0; });
-    $('summary').innerHTML += '<span>Sodium <b>' + Math.round(fuel.sum.needSodium) + ' mg</b> target</span>';
-    $('warnings').innerHTML = fuel.warnings.map(function (w) { return '<div class="warn-box">' + esc(w) + '</div>'; }).join('');
-
-    $('crewHeader').textContent = 'Start ' + $('start').value + ' · target ' + $('target').value + ' · finish ' + P.fmtClock(start + target);
-
-    var html = '<thead><tr><th>Point</th><th>km</th><th>Arrive</th><th class="hide-sm">Elapsed</th>' +
-      '<th class="hide-sm">Leg</th><th class="hide-sm">Climb</th><th>Pace</th><th>Carbs</th>' +
-      '<th class="hide-sm">Fluid</th><th>Buffer</th></tr></thead><tbody>';
-    function carryRow(leg, label) {
-      var parts = leg.items.map(function (it) {
-        var p = products[it.index];
-        return P.fmtCount(it.count) + ' ' + esc(p.name || KIND_LABEL[p.kind]) +
-          (p.kind === 'drink' ? ' in ' + Math.round(it.count * p.ml) + ' ml' : '');
-      });
-      if (!hasDrink && leg.need.fluid > 0) parts.push(Math.round(leg.need.fluid / 50) * 50 + ' ml water');
-      return '<tr class="carry"><td colspan="10">' + label + (parts.length ? parts.join(' · ') : 'nothing needed') + '</td></tr>';
-    }
-    if (hasProducts) html += carryRow(fuel.legs[0], 'Start with: ');
-    plan.rows.forEach(function (r, ri) {
-      var buf = r.bufferMin == null ? '–' :
-        '<span class="' + (r.bufferMin < 20 ? 'warn' : 'ok') + '">' + P.fmtDur(r.bufferMin) + '</span>';
-      var last = ri === plan.rows.length - 1;
-      html += '<tr' + (hasProducts && !last ? ' class="has-carry"' : '') + '><td class="name">' + esc(r.name) + '</td>' +
-        '<td>' + r.km.toFixed(1) + '</td>' +
-        '<td class="big">' + P.fmtClock(r.arriveClockMin) + '</td>' +
-        '<td class="hide-sm">' + P.fmtDur(r.arriveElapsedMin) + '</td>' +
-        '<td class="hide-sm">' + r.legKm.toFixed(1) + ' km</td>' +
-        '<td class="hide-sm">+' + Math.round(r.legUp) + ' m</td>' +
-        '<td>' + P.fmtPace(r.paceMinPerKm) + '</td>' +
-        '<td>' + r.carbsG + ' g</td>' +
-        '<td class="hide-sm">' + r.fluidMl + ' ml</td>' +
-        '<td>' + buf + '</td></tr>';
-      if (hasProducts && ri + 1 < plan.rows.length) html += carryRow(fuel.legs[ri + 1], 'Pick up here for next leg: ');
-    });
-    $('plan').innerHTML = html + '</tbody>';
-
-    if (hasProducts) {
-      var list = fuel.totals.map(function (n, i) {
-        if (!n) return '';
-        var p = products[i];
-        return '<li>' + Math.ceil(n) + '× ' + esc(p.name || KIND_LABEL[p.kind]) + '</li>';
-      }).join('');
-      $('shopping').innerHTML = '<div class="shop"><h3>Race-day kit list</h3><ul>' + list + '</ul>' +
-        '<p class="hint">Gives ' + Math.round(fuel.sum.carbs) + ' g carbs, ' + Math.round(fuel.sum.sodium) + ' mg sodium' +
-        (fuel.sum.caffeine ? ', ' + Math.round(fuel.sum.caffeine) + ' mg caffeine' : '') +
-        '. Pack one or two spares of each.</p></div>';
-    } else {
-      $('shopping').innerHTML = '<p class="hint no-print">Add your gels and drinks in section 4 to get a carry list for each leg.</p>';
-    }
-  }
-
-  function render() { renderCheckpoints(); renderProducts(); renderChart(); renderPlan(); }
-
-  function esc(s) {
-    return String(s == null ? '' : s).replace(/[&<>"']/g, function (ch) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
-    });
-  }
-
-  load();
-  render();
-})();
-</script>
+<script src="js/app.js"></script>
+<script src="js/today.js"></script>
+<script src="js/race.js"></script>
+<script src="js/run.js"></script>
+<script src="js/fuel.js"></script>
+<script src="js/kit.js"></script>
+<script>App.start();</script>
 </body>
 </html>
