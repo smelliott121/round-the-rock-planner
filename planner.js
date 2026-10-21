@@ -71,7 +71,8 @@
     var climb = climbBetween({ ele: smooth }, 0, smooth.length - 1);
     return {
       dist: dist, ele: smooth, lat: lat, lon: lon,
-      totalKm: total, ascent: climb.up, descent: climb.down, hasEle: hasEle
+      totalKm: total, ascent: climb.up, descent: climb.down, hasEle: hasEle,
+      raw: raw.map(function (p, i) { return { lat: p.lat, lon: p.lon, km: cum[i] }; })
     };
   }
 
@@ -188,7 +189,7 @@
     return {
       dist: profile.dist, ele: smooth, lat: profile.lat, lon: profile.lon,
       totalKm: profile.totalKm, ascent: climb.up, descent: climb.down,
-      hasEle: true, eleSource: 'dem'
+      hasEle: true, eleSource: 'dem', raw: profile.raw
     };
   }
 
@@ -283,6 +284,78 @@
     return { legs: legs, totals: totals, sum: sum, warnings: warnings };
   }
 
+  /*
+   * Training sections: a stretch of the course between two km marks, optionally
+   * as an out-and-back. Time uses the same grade model from a flat training pace.
+   */
+  function eleAt(profile, km) {
+    var x = Math.max(0, Math.min(profile.totalKm, km)) / STEP_KM, i = Math.floor(x);
+    if (i >= profile.ele.length - 1) return profile.ele[profile.ele.length - 1];
+    return profile.ele[i] + (x - i) * (profile.ele[i + 1] - profile.ele[i]);
+  }
+
+  function sectionPoints(profile, fromKm, toKm) {
+    var pts = profile.raw.filter(function (p) { return p.km > fromKm && p.km < toKm; });
+    function at(km) {
+      var i = Math.max(0, Math.min(profile.dist.length - 1, Math.round(km / STEP_KM)));
+      return { lat: profile.lat[i], lon: profile.lon[i], km: km };
+    }
+    pts = [at(fromKm)].concat(pts).concat([at(toKm)]);
+    return pts.map(function (p) { return { lat: p.lat, lon: p.lon, km: p.km, ele: eleAt(profile, p.km) }; });
+  }
+
+  function sectionStats(profile, fromKm, toKm, flatPaceMin, outAndBack) {
+    var i0 = Math.round(fromKm / STEP_KM), i1 = Math.round(toKm / STEP_KM);
+    var c = climbBetween(profile, i0, i1);
+    var t = 0;
+    for (var i = i0; i < i1 && i < profile.dist.length - 1; i++) {
+      var seg = profile.dist[i + 1] - profile.dist[i];
+      if (seg <= 0) continue;
+      var g = (profile.ele[i + 1] - profile.ele[i]) / (seg * 1000);
+      t += gradeCost(g) * seg * flatPaceMin;
+      if (outAndBack) t += gradeCost(-g) * seg * flatPaceMin;
+    }
+    var km = toKm - fromKm;
+    return {
+      km: outAndBack ? km * 2 : km,
+      up: outAndBack ? c.up + c.down : c.up,
+      down: outAndBack ? c.up + c.down : c.down,
+      minutes: t
+    };
+  }
+
+  // Steepest window of a given length (by climb), for the "hilliest" presets.
+  function hilliestWindow(profile, lengthKm) {
+    var n = Math.round(lengthKm / STEP_KM);
+    if (n >= profile.ele.length - 1) return { from: 0, to: profile.totalKm };
+    var up = [0];
+    for (var i = 0; i < profile.ele.length - 1; i++) up.push(up[i] + Math.max(0, profile.ele[i + 1] - profile.ele[i]));
+    var best = 0, bestI = 0;
+    for (var j = 0; j + n < up.length; j++) {
+      if (up[j + n] - up[j] > best) { best = up[j + n] - up[j]; bestI = j; }
+    }
+    return { from: +(bestI * STEP_KM).toFixed(1), to: +((bestI + n) * STEP_KM).toFixed(1) };
+  }
+
+  function toGPX(points, name, outAndBack) {
+    var all = outAndBack ? points.concat(points.slice(0, -1).reverse()) : points;
+    var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+    return '<?xml version="1.0" encoding="UTF-8"?>\n' +
+      '<gpx version="1.1" creator="Round the Rock Planner" xmlns="http://www.topografix.com/GPX/1/1">\n' +
+      '<metadata><name>' + esc(name) + '</name></metadata>\n<trk><name>' + esc(name) + '</name><trkseg>\n' +
+      all.map(function (p) {
+        return '<trkpt lat="' + p.lat.toFixed(6) + '" lon="' + p.lon.toFixed(6) + '"><ele>' + p.ele.toFixed(1) + '</ele></trkpt>';
+      }).join('\n') +
+      '\n</trkseg></trk>\n</gpx>\n';
+  }
+
+  function bearing(a, b) {
+    var rad = Math.PI / 180;
+    var y = Math.sin((b.lon - a.lon) * rad) * Math.cos(b.lat * rad);
+    var x = Math.cos(a.lat * rad) * Math.sin(b.lat * rad) - Math.sin(a.lat * rad) * Math.cos(b.lat * rad) * Math.cos((b.lon - a.lon) * rad);
+    return (Math.atan2(y, x) / rad + 360) % 360;
+  }
+
   function fmtCount(n) { return (n % 1 ? n.toFixed(1) : String(n)) + '×'; }
 
   function fmtDur(min) {
@@ -306,7 +379,9 @@
   var api = {
     parseGPX: parseGPX, buildProfile: buildProfile, computePlan: computePlan,
     gradeCost: gradeCost, elevationSamples: elevationSamples, applyElevation: applyElevation,
-    sweatRate: sweatRate, computeFuel: computeFuel, fmtCount: fmtCount, fmtDur: fmtDur, fmtClock: fmtClock, fmtPace: fmtPace,
+    sweatRate: sweatRate, computeFuel: computeFuel,
+    sectionPoints: sectionPoints, sectionStats: sectionStats, hilliestWindow: hilliestWindow,
+    toGPX: toGPX, bearing: bearing, eleAt: eleAt, fmtCount: fmtCount, fmtDur: fmtDur, fmtClock: fmtClock, fmtPace: fmtPace,
     parseHM: parseHM, STEP_KM: STEP_KM
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

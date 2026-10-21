@@ -19,6 +19,15 @@ Open `index.html` in a browser, or turn on GitHub Pages (Settings → Pages → 
 
 The route GPX is on the Fastest Known Time "Jersey Round" page.
 
+## 3D course map (`map.html`)
+
+- The course on a 3D map of Jersey (terrain exaggerated 1.8× so the cliffs read).
+- **Training sections:** pick any stretch by km, a leg between checkpoints, or the hilliest 10/15/20 km, optionally as an out-and-back. Shows distance, climb and a time estimate from her flat training pace.
+- **Fly through** the section at ground level.
+- **Download GPX** of the section, then open it with the COROS app to put it on her watch.
+
+Map: [OpenFreeMap](https://openfreemap.org/) (© OpenMapTiles, OpenStreetMap contributors). Terrain: [Mapzen Terrain Tiles on AWS](https://registry.opendata.aws/terrain-tiles/). Library: MapLibre GL JS.
+
 ## How the pacing works
 
 The course is resampled every 100 m. Each step gets an effort weight from Tobler's hiking function, relative to flat ground: a 10% climb costs about 1.4× flat, the quickest gradient is a gentle 5% descent, and steep descents slow down again. A late-race slowdown (default 10%) is added in a straight line from start to finish.
@@ -30,7 +39,6 @@ Engine: `planner.js` (pure functions, testable in Node). Interface: `index.html`
 ## Ideas for next
 
 - Pull real training data from COROS (self-service OAuth) to calibrate the climb and fatigue factors from her own runs
-- 3D map of Jersey with the course split into training sections
 - Race-day weather on the course
 - Live crew view with ETA to the next checkpoint
 - London Marathon plan (flat course, even splits)
