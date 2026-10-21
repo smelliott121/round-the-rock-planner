@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Round the Rock Planner</title>
+<meta name="description" content="Elevation-adjusted pacing, fuelling and crew plan for a trail ultra.">
+<style>
+  :root {
+    --bg: #f6f3ee; --card: #ffffff; --ink: #1d2421; --muted: #5f6b66; --line: #ddd6cb;
+    --accent: #0f6b5c; --accent-ink: #ffffff; --sea: #2c6e8f; --warn: #b4441f; --ok: #2e7d32;
+    --chart-fill: rgba(15, 107, 92, 0.16);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121614; --card: #1b201e; --ink: #e8ece9; --muted: #9aa7a1; --line: #2e3532;
+      --accent: #4fbfa8; --accent-ink: #0d1412; --sea: #6fb3d6; --warn: #ef8a62; --ok: #7bc77f;
+      --chart-fill: rgba(79, 191, 168, 0.18);
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+  h2 { font-size: 1.05rem; margin: 0 0 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
+  input { width: 100%; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 10px; }
+  input[type=file] { padding: 6px; }
+  button { font: inherit; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink);
+    border-radius: 8px; padding: 8px 14px; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--accent); }
+  button.x { background: transparent; border: none; color: var(--muted); padding: 4px 8px; font-size: 1.1rem; }
+  .row-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .stats { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 10px; color: var(--muted); font-size: 0.9rem; }
+  .stats b { color: var(--ink); }
+  .hint { font-size: 0.85rem; color: var(--muted); margin: 8px 0 0; }
+  .error { color: var(--warn); font-weight: 600; }
+  #chart svg { width: 100%; height: auto; display: block; cursor: crosshair; }
+  .cp-list { display: grid; gap: 8px; }
+  .cp { display: grid; grid-template-columns: 1.6fr 0.8fr 0.7fr 0.9fr auto; gap: 6px; align-items: end; }
+  .cp label { font-size: 0.72rem; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 8px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 600; font-size: 0.78rem; }
+  td.name { font-weight: 600; }
+  .ok { color: var(--ok); } .warn { color: var(--warn); font-weight: 600; }
+  .big { font-size: 1.05rem; font-weight: 700; }
+  .crew-only { display: none; }
+  @media (max-width: 560px) {
+    .cp { grid-template-columns: 1fr 0.7fr 0.6fr auto; }
+    .cp .cutoff { grid-column: 1 / 3; }
+    .hide-sm { display: none; }
+    table { font-size: 0.84rem; }
+    th, td { padding: 8px 3px; }
+    .big { font-size: 0.95rem; }
+  }
+  @media print {
+    body { background: #fff; color: #000; font-size: 13pt; }
+    .no-print, .card.inputs, #chart, .sub { display: none !important; }
+    .card { border: none; padding: 0; }
+    .crew-only { display: block; }
+    .hide-sm { display: table-cell !important; }
+    th, td { border-bottom: 1px solid #999; padding: 6px 4px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Round the Rock Planner</h1>
+  <p class="sub">Elevation-adjusted splits, fuelling and a crew sheet for race day.</p>
+
+  <section class="card inputs">
+    <h2>1. Course</h2>
+    <label for="gpx">GPX file of the route</label>
+    <input id="gpx" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml">
+    <div id="courseStats" class="stats"></div>
+    <p class="hint">The Round the Rock route GPX is on the Fastest Known Time "Jersey Round" page.</p>
+  </section>
+
+  <section class="card" id="chartCard" hidden>
+    <h2>Elevation</h2>
+    <div id="chart"></div>
+    <p class="hint no-print">Tap the profile to drop a checkpoint there.</p>
+  </section>
+
+  <section class="card inputs">
+    <h2>2. Race plan</h2>
+    <div class="grid">
+      <div><label for="target">Target finish (h:mm)</label><input id="target" value="11:00" inputmode="numeric"></div>
+      <div><label for="start">Start time</label><input id="start" type="time" value="06:00"></div>
+      <div><label for="finishCutoff">Finish cutoff (clock)</label><input id="finishCutoff" type="time" value="18:00"></div>
+      <div><label for="fatigue">Late-race slowdown (%)</label><input id="fatigue" type="number" min="0" max="50" value="10"></div>
+      <div><label for="carbs">Carbs per hour (g)</label><input id="carbs" type="number" min="0" value="60"></div>
+      <div><label for="fluid">Fluid per hour (ml)</label><input id="fluid" type="number" min="0" step="50" value="500"></div>
+    </div>
+  </section>
+
+  <section class="card inputs">
+    <h2>3. Checkpoints</h2>
+    <div id="cps" class="cp-list"></div>
+    <div class="row-actions">
+      <button class="ghost" id="addCp" type="button">Add checkpoint</button>
+      <button class="ghost" id="autoCp" type="button">Every 10 km</button>
+      <button class="ghost" id="clearCp" type="button">Clear</button>
+    </div>
+    <p class="hint">Use the official checkpoint distances and cutoffs from the race info once they're out.</p>
+  </section>
+
+  <section class="card" id="planCard" hidden>
+    <h2>Race-day plan</h2>
+    <p class="crew-only" id="crewHeader"></p>
+    <div id="summary" class="stats"></div>
+    <div class="table-wrap"><table id="plan"></table></div>
+    <div class="row-actions no-print">
+      <button id="print" type="button">Print crew sheet</button>
+    </div>
+  </section>
+
+  <p id="msg" class="error"></p>
+</main>
+
+<script src="planner.js"></script>
+<script>
+(function () {
+  'use strict';
+  var P = window.Planner;
+  var $ = function (id) { return document.getElementById(id); };
+  var STORE = 'rtr-planner-v1';
+  var profile = null;
+  var gpxText = null;
+  var checkpoints = [];
+
+  function save() {
+    try {
+      localStorage.setItem(STORE, JSON.stringify({
+        target: $('target').value, start: $('start').value, finishCutoff: $('finishCutoff').value,
+        fatigue: $('fatigue').value, carbs: $('carbs').value, fluid: $('fluid').value,
+        checkpoints: checkpoints, gpx: gpxText
+      }));
+    } catch (e) { /* storage full or blocked: the app still works */ }
+  }
+
+  function load() {
+    var s = null;
+    try { s = JSON.parse(localStorage.getItem(STORE) || 'null'); } catch (e) {}
+    if (!s) return;
+    ['target', 'start', 'finishCutoff', 'fatigue', 'carbs', 'fluid'].forEach(function (k) {
+      if (s[k] != null) $(k).value = s[k];
+    });
+    checkpoints = Array.isArray(s.checkpoints) ? s.checkpoints : [];
+    if (s.gpx) useGPX(s.gpx);
+  }
+
+  function useGPX(text) {
+    try {
+      profile = P.buildProfile(P.parseGPX(text));
+      gpxText = text;
+      $('msg').textContent = '';
+      $('courseStats').innerHTML =
+        '<span><b>' + profile.totalKm.toFixed(1) + ' km</b></span>' +
+        '<span><b>+' + Math.round(profile.ascent) + ' m</b> climb</span>' +
+        '<span><b>−' + Math.round(profile.descent) + ' m</b> descent</span>' +
+        (profile.hasEle ? '' : '<span class="error">No elevation in this file, so splits are flat-paced.</span>');
+    } catch (e) {
+      profile = null;
+      $('msg').textContent = e.message;
+    }
+    render();
+  }
+
+  $('gpx').addEventListener('change', function (e) {
+    var f = e.target.files[0];
+    if (!f) return;
+    var r = new FileReader();
+    r.onload = function () { useGPX(String(r.result)); save(); };
+    r.readAsText(f);
+  });
+
+  function renderCheckpoints() {
+    var box = $('cps');
+    box.innerHTML = '';
+    if (!checkpoints.length) {
+      box.innerHTML = '<p class="hint">No checkpoints yet.</p>';
+      return;
+    }
+    checkpoints.forEach(function (c, i) {
+      var row = document.createElement('div');
+      row.className = 'cp';
+      row.innerHTML =
+        '<div><label>Name</label><input data-k="name" value="' + esc(c.name) + '"></div>' +
+        '<div><label>km</label><input data-k="km" type="number" step="0.1" value="' + c.km + '"></div>' +
+        '<div><label>Stop (min)</label><input data-k="stopMin" type="number" min="0" value="' + c.stopMin + '"></div>' +
+        '<div class="cutoff"><label>Cutoff</label><input data-k="cutoff" type="time" value="' + (c.cutoff || '') + '"></div>' +
+        '<button class="x" type="button" aria-label="Remove checkpoint">✕</button>';
+      row.querySelectorAll('input').forEach(function (inp) {
+        inp.addEventListener('change', function () {
+          var k = inp.dataset.k;
+          c[k] = (k === 'km' || k === 'stopMin') ? parseFloat(inp.value) || 0 : inp.value;
+          if (k === 'km') sortCps();
+          save(); render();
+        });
+      });
+      row.querySelector('button').addEventListener('click', function () {
+        checkpoints.splice(i, 1); save(); render();
+      });
+      box.appendChild(row);
+    });
+  }
+
+  function sortCps() { checkpoints.sort(function (a, b) { return a.km - b.km; }); }
+
+  function addCp(km) {
+    checkpoints.push({ name: 'Checkpoint ' + (checkpoints.length + 1), km: Math.round(km * 10) / 10, stopMin: 3, cutoff: '' });
+    sortCps(); renumber(); save(); render();
+  }
+
+  function renumber() {
+    checkpoints.forEach(function (c, i) {
+      if (/^Checkpoint \d+$/.test(c.name)) c.name = 'Checkpoint ' + (i + 1);
+    });
+  }
+
+  $('addCp').addEventListener('click', function () {
+    var last = checkpoints.length ? checkpoints[checkpoints.length - 1].km : 0;
+    var max = profile ? profile.totalKm - 0.5 : 70;
+    addCp(Math.min(max, last + 10));
+  });
+  $('autoCp').addEventListener('click', function () {
+    if (!profile) { $('msg').textContent = 'Load a GPX file first.'; return; }
+    checkpoints = [];
+    for (var km = 10; km < profile.totalKm - 2; km += 10) {
+      checkpoints.push({ name: 'Checkpoint ' + (checkpoints.length + 1), km: km, stopMin: 3, cutoff: '' });
+    }
+    save(); render();
+  });
+  $('clearCp').addEventListener('click', function () { checkpoints = []; save(); render(); });
+
+  ['target', 'start', 'finishCutoff', 'fatigue', 'carbs', 'fluid'].forEach(function (id) {
+    $(id).addEventListener('input', function () { save(); renderPlan(); });
+  });
+
+  $('print').addEventListener('click', function () { window.print(); });
+
+  function renderChart() {
+    var card = $('chartCard');
+    if (!profile) { card.hidden = true; return; }
+    card.hidden = false;
+    var W = 800, H = 220, pad = { l: 36, r: 8, t: 12, b: 24 };
+    var n = profile.dist.length, step = Math.max(1, Math.floor(n / 400));
+    var minE = Math.min.apply(null, profile.ele), maxE = Math.max.apply(null, profile.ele);
+    if (maxE - minE < 20) maxE = minE + 20;
+    var x = function (km) { return pad.l + (km / profile.totalKm) * (W - pad.l - pad.r); };
+    var y = function (e) { return pad.t + (1 - (e - minE) / (maxE - minE)) * (H - pad.t - pad.b); };
+    var d = 'M' + x(0) + ',' + y(profile.ele[0]);
+    for (var i = step; i < n; i += step) d += ' L' + x(profile.dist[i]).toFixed(1) + ',' + y(profile.ele[i]).toFixed(1);
+    d += ' L' + x(profile.totalKm).toFixed(1) + ',' + y(profile.ele[n - 1]).toFixed(1);
+    var area = d + ' L' + x(profile.totalKm) + ',' + (H - pad.b) + ' L' + x(0) + ',' + (H - pad.b) + ' Z';
+
+    var ticks = '';
+    for (var km = 0; km <= profile.totalKm; km += 10) {
+      ticks += '<text x="' + x(km) + '" y="' + (H - 6) + '" text-anchor="middle" font-size="12" fill="var(--muted)">' + km + '</text>';
+    }
+    var marks = checkpoints.map(function (c) {
+      if (c.km <= 0 || c.km >= profile.totalKm) return '';
+      var xx = x(c.km).toFixed(1);
+      return '<line x1="' + xx + '" x2="' + xx + '" y1="' + pad.t + '" y2="' + (H - pad.b) + '" stroke="var(--sea)" stroke-dasharray="3 3"/>' +
+        '<circle cx="' + xx + '" cy="' + y(profile.ele[Math.round(c.km / P.STEP_KM)] || minE).toFixed(1) + '" r="4" fill="var(--sea)"/>';
+    }).join('');
+
+    $('chart').innerHTML =
+      '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Elevation profile">' +
+      '<path d="' + area + '" fill="var(--chart-fill)"/>' +
+      '<path d="' + d + '" fill="none" stroke="var(--accent)" stroke-width="2"/>' +
+      '<text x="4" y="' + (y(maxE) + 4) + '" font-size="12" fill="var(--muted)">' + Math.round(maxE) + 'm</text>' +
+      '<text x="4" y="' + (y(minE)) + '" font-size="12" fill="var(--muted)">' + Math.round(minE) + 'm</text>' +
+      ticks + marks + '</svg>';
+
+    $('chart').querySelector('svg').addEventListener('click', function (ev) {
+      var r = this.getBoundingClientRect();
+      var px = (ev.clientX - r.left) / r.width * W;
+      var km = (px - pad.l) / (W - pad.l - pad.r) * profile.totalKm;
+      if (km > 0.5 && km < profile.totalKm - 0.5) addCp(km);
+    });
+  }
+
+  function renderPlan() {
+    var card = $('planCard');
+    if (!profile) { card.hidden = true; return; }
+    var target = P.parseHM($('target').value);
+    var start = P.parseHM($('start').value);
+    if (target == null || start == null) { $('msg').textContent = 'Enter the target as h:mm, for example 11:00.'; card.hidden = true; return; }
+    var plan;
+    try {
+      plan = P.computePlan(profile, {
+        targetMin: target, startMin: start,
+        fatigue: (parseFloat($('fatigue').value) || 0) / 100,
+        carbsPerHour: parseFloat($('carbs').value) || 0,
+        fluidPerHour: parseFloat($('fluid').value) || 0,
+        finishCutoffMin: P.parseHM($('finishCutoff').value),
+        checkpoints: checkpoints.map(function (c) {
+          return { name: c.name, km: c.km, stopMin: c.stopMin || 0, cutoffMin: P.parseHM(c.cutoff) };
+        })
+      });
+    } catch (e) { $('msg').textContent = e.message; card.hidden = true; return; }
+    $('msg').textContent = '';
+    card.hidden = false;
+
+    var totalCarbs = plan.rows.reduce(function (s, r) { return s + r.carbsG; }, 0);
+    var totalFluid = plan.rows.reduce(function (s, r) { return s + r.fluidMl; }, 0);
+    $('summary').innerHTML =
+      '<span>Finish <b>' + P.fmtClock(start + target) + '</b></span>' +
+      '<span>Average <b>' + P.fmtPace(plan.movingMin / plan.totalKm) + '/km</b> moving</span>' +
+      '<span>Stops <b>' + Math.round(plan.stopsMin) + ' min</b></span>' +
+      '<span>Fuel <b>' + totalCarbs + ' g</b> carbs, <b>' + (totalFluid / 1000).toFixed(1) + ' L</b></span>';
+    $('crewHeader').textContent = 'Start ' + $('start').value + ' · target ' + $('target').value + ' · finish ' + P.fmtClock(start + target);
+
+    var html = '<thead><tr><th>Point</th><th>km</th><th>Arrive</th><th class="hide-sm">Elapsed</th>' +
+      '<th class="hide-sm">Leg</th><th class="hide-sm">Climb</th><th>Pace</th><th>Carbs</th>' +
+      '<th class="hide-sm">Fluid</th><th>Buffer</th></tr></thead><tbody>';
+    plan.rows.forEach(function (r) {
+      var buf = r.bufferMin == null ? '–' :
+        '<span class="' + (r.bufferMin < 20 ? 'warn' : 'ok') + '">' + P.fmtDur(r.bufferMin) + '</span>';
+      html += '<tr><td class="name">' + esc(r.name) + '</td>' +
+        '<td>' + r.km.toFixed(1) + '</td>' +
+        '<td class="big">' + P.fmtClock(r.arriveClockMin) + '</td>' +
+        '<td class="hide-sm">' + P.fmtDur(r.arriveElapsedMin) + '</td>' +
+        '<td class="hide-sm">' + r.legKm.toFixed(1) + ' km</td>' +
+        '<td class="hide-sm">+' + Math.round(r.legUp) + ' m</td>' +
+        '<td>' + P.fmtPace(r.paceMinPerKm) + '</td>' +
+        '<td>' + r.carbsG + ' g</td>' +
+        '<td class="hide-sm">' + r.fluidMl + ' ml</td>' +
+        '<td>' + buf + '</td></tr>';
+    });
+    $('plan').innerHTML = html + '</tbody>';
+  }
+
+  function render() { renderCheckpoints(); renderChart(); renderPlan(); }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (ch) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+    });
+  }
+
+  load();
+  render();
+})();
+</script>
+</body>
+</html>
