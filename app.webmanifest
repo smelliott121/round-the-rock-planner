@@ -1,9 +1,9 @@
 {
-  "id": "./?app=lucys-races-2",
+  "id": "./?app=lucys-races-3",
   "name": "Lucy's Race Planner",
   "short_name": "Lucy's Races",
   "description": "Race pacing, fuelling, training routes and conditions for London and Round the Rock.",
-  "start_url": "./#today",
+  "start_url": "./?app=1#today",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
