@@ -28,6 +28,13 @@ The route GPX is on the Fastest Known Time "Jersey Round" page.
 
 Map: [OpenFreeMap](https://openfreemap.org/) (© OpenMapTiles, OpenStreetMap contributors). Terrain: [Mapzen Terrain Tiles on AWS](https://registry.opendata.aws/terrain-tiles/). Library: MapLibre GL JS.
 
+## Plan a run (`routes.html`)
+
+- **Route generator:** set a start (GPS or tap the map), a distance and Hilly / Any / Flat, as a loop or out-and-back. It tries six directions on real footpaths and lanes, checks the climb on each, and offers the best three.
+- **Her routes:** save generated routes or import any GPX (a COROS run, Strava, Komoot, AllTrails). View in 3D, fly through, download GPX for the watch.
+
+Routing: [FOSSGIS OSRM](https://routing.openstreetmap.de/about.html) foot profile on OpenStreetMap data (kept to one request per second, per their policy). Elevation: Open-Meteo.
+
 ## How the pacing works
 
 The course is resampled every 100 m. Each step gets an effort weight from Tobler's hiking function, relative to flat ground: a 10% climb costs about 1.4× flat, the quickest gradient is a gentle 5% descent, and steep descents slow down again. A late-race slowdown (default 10%) is added in a straight line from start to finish.
