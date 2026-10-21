@@ -1,6 +1,6 @@
 /* Offline support: the app itself is network-first (so updates arrive straight away)
    with a cached copy for when there's no signal. Map tiles she has viewed are kept too. */
-var VERSION = 'v2-2026-10-21';
+var VERSION = 'v3-2026-10-21';
 var APP = 'app-' + VERSION, TILES = 'tiles-v1';
 var SHELL = ['./', 'index.html', 'css/app.css', 'planner.js', 'js/app.js', 'js/today.js', 'js/race.js', 'js/run.js', 'js/fuel.js', 'js/kit.js',
   'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png',

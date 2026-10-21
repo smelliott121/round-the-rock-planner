@@ -4,10 +4,12 @@
   var A = window.App, $ = A.$, esc = A.esc;
   var JERSEY = { lat: 49.214, lon: -2.131, name: 'Jersey' };
   var DEFAULT_RACES = [
-    { id: 'london', name: 'London Marathon', date: '2027-04-25' },
+    { id: 'london', name: 'London Marathon', date: '2027-04-24' },
     { id: 'rtr', name: 'Round the Rock', date: '2027-07-31' }
   ];
   var races = (A.state.races || DEFAULT_RACES).map(function (r) { return Object.assign({}, r); });
+  // Lucy runs the Saturday: move the old Sunday default if it was saved before this change.
+  races.forEach(function (r) { if (r.id === 'london' && r.date === '2027-04-25') { r.date = '2027-04-24'; A.state.races = races; A.saveState(); } });
   function saveRaces() { A.state.races = races; A.saveState(); A.emit('races', races); }
 
   function daysUntil(dateStr) {
@@ -52,7 +54,7 @@
     });
     var hint = document.createElement('p');
     hint.className = 'hint';
-    hint.textContent = 'London 2027 runs over two days, 24 and 25 April. Set the day you\'re given. Round the Rock is from the race listing, so check it with the organiser.';
+    hint.textContent = 'Lucy runs London on Saturday 24 April. Round the Rock is from the race listing, so check it with the organiser.';
     box.appendChild(hint);
   }
 
