@@ -34,7 +34,7 @@ Everything Lucy enters is stored on her phone only. Outside services see only co
 - `planner.js`: pacing, fuel and section maths (pure functions, testable in Node).
 - `js/app.js`: storage, services, map, sheet, tabs, notes, fly-through.
 - `js/today.js`, `js/race.js`, `js/run.js`, `js/fuel.js`, `js/kit.js`: one file per tab.
-- `sw.js`, `manifest.webmanifest`, `icons/`: install and offline support.
+- `sw.js`, `app.webmanifest`, `icons/`: install and offline support.
 - `map.html`, `routes.html`: redirects from the earlier versions.
 
 ## How the pacing works
