@@ -150,6 +150,28 @@
     });
   }
 
+  // Public Overpass servers. The main one is often overloaded, so try the next if it's
+  // busy, rate-limited, slow or unreachable.
+  var OVERPASS = ['https://overpass.private.coffee/api/interpreter', 'https://overpass-api.de/api/interpreter'];
+  function overpassQuery(q) {
+    var i = 0;
+    function attempt() {
+      var url = OVERPASS[i] + '?data=' + encodeURIComponent(q);
+      var ctl = window.AbortController ? new AbortController() : null;
+      var timer = setTimeout(function () { if (ctl) ctl.abort(); }, 15000);
+      return fetch(url, ctl ? { signal: ctl.signal } : {}).then(function (r) {
+        clearTimeout(timer);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      }).catch(function (err) {
+        clearTimeout(timer);
+        if (++i < OVERPASS.length) return attempt();
+        throw err;
+      });
+    }
+    return attempt();
+  }
+
   // Overpass: water taps and toilets inside a box. Cached per rounded box.
   function pois(s, w, n, e) {
     var key = [s, w, n, e].map(function (v) { return v.toFixed(2); }).join(',');
@@ -158,9 +180,7 @@
     var bbox = [s, w, n, e].map(function (v) { return v.toFixed(4); }).join(',');
     var q = '[out:json][timeout:20];(node["amenity"="drinking_water"](' + bbox + ');node["amenity"="water_point"](' + bbox + ');' +
       'node["amenity"="toilets"](' + bbox + '););out body 300;';
-    return overpassGate().then(function () {
-      return getJSON('https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(q));
-    }).then(function (j) {
+    return overpassGate().then(function () { return overpassQuery(q); }).then(function (j) {
       var d = (j.elements || []).map(function (el) {
         var t = el.tags || {};
         return { lat: el.lat, lon: el.lon, kind: t.amenity === 'toilets' ? 'toilet' : 'water', name: t.name || '', hours: t.opening_hours || '', fee: t.fee || '' };
@@ -529,7 +549,7 @@
         mergePois(d);
         var w = d.filter(function (p) { return p.kind === 'water'; }).length, t = d.length - w;
         toast(d.length ? 'Showing ' + w + ' water ' + (w === 1 ? 'tap' : 'taps') + ' and ' + t + ' ' + (t === 1 ? 'toilet' : 'toilets') : 'No water taps or toilets mapped around here');
-      }, function () { toast('Couldn\'t load water taps and toilets. Check your connection.'); });
+      }, function () { toast('The water and toilet map service is busy right now. Try again in a minute.'); });
     });
   }
   function mergePois(d) {

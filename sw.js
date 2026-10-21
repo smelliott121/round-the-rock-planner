@@ -1,6 +1,6 @@
 /* Offline support: the app itself is network-first (so updates arrive straight away)
    with a cached copy for when there's no signal. Map tiles she has viewed are kept too. */
-var VERSION = 'v6-2026-10-21';
+var VERSION = 'v7-2026-10-21';
 // Cache names start with rtr- so this app never touches caches belonging to other apps
 // on the same github.io address (e.g. the commodity map).
 var APP = 'rtr-app-' + VERSION, TILES = 'rtr-tiles-v1';

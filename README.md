@@ -26,7 +26,7 @@ Everything Lucy enters is stored on her phone only. Outside services see only co
 | Weather and tides | [Open-Meteo](https://open-meteo.com/) forecast and marine models. Tides are model estimates; check [Jersey Met tide tables](https://m.gov.je/Weather/Tides) for anything safety-critical. |
 | Routing | [FOSSGIS OSRM](https://routing.openstreetmap.de/about.html) foot profile, at most one request per second |
 | Place search | [Nominatim](https://nominatim.openstreetmap.org/), on submit only, cached, at most one request per second ([policy](https://operations.osmfoundation.org/policies/nominatim/)) |
-| Water and toilets | [Overpass API](https://overpass-api.de/), cached for a week |
+| Water and toilets | [Overpass API](https://wiki.openstreetmap.org/wiki/Overpass_API) via Private.coffee, falling back to overpass-api.de; cached for a week |
 
 ## Code
 
