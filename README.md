@@ -8,7 +8,7 @@ The map fills the screen. A panel slides up over it (drag the handle, or tap it 
 
 - **Today:** countdowns to each race, the weather where she runs (hourly, wind, sunrise, sunset and daylight left) and tides.
 - **Race:** the Round the Rock plan. Elevation-adjusted splits to an 11-hour target, checkpoints with arrival times on the map, buffers against cutoffs, what to pick up at each checkpoint, a race-day forecast (from 15 days out) and a printable crew sheet. **Sections** picks a stretch of the course (a leg, or the hilliest 10, 15 or 20 km), flies through it in 3D and exports it as GPX.
-- **Run:** makes training routes anywhere. Search a town, use GPS or tap the map, choose a distance, hilly, any or flat, and loop or out-and-back. It tries six directions on real paths and offers the best three, with the weather, a finish-before-dark check and water taps and toilets along the way. Lucy's routes are saved, and any GPX can be imported.
+- **Run:** makes training routes anywhere. Search a town, use GPS or tap the map, choose a distance, hilly, any or flat, and loop or out-and-back. It tries six directions on real paths and offers the best three, with the weather, a finish-before-dark check and water taps and toilets along the way. Lucy's routes are saved, and any GPX can be imported. **My pace** learns her own hill pace from recorded runs (GPX or TCX exported from COROS).
 - **Fuel:** carbs and fluid targets, her own gels, drinks and salt tabs, a sweat test calculator and a gut training log.
 - **Kit:** a race kit checklist and shoe mileage.
 
@@ -34,11 +34,14 @@ Everything Lucy enters is stored on her phone only. Outside services see only co
 - `planner.js`: pacing, fuel and section maths (pure functions, testable in Node).
 - `js/app.js`: storage, services, map, sheet, tabs, notes, fly-through.
 - `js/today.js`, `js/race.js`, `js/run.js`, `js/fuel.js`, `js/kit.js`: one file per tab.
+- `js/pace.js`: learning her pace from recorded runs.
 - `sw.js`, `app.webmanifest`, `icons/`: install and offline support.
 - `map.html`, `routes.html`: redirects from the earlier versions.
 
 ## How the pacing works
 
 The course is resampled every 100 m. Each step gets an effort weight from Tobler's hiking function relative to flat ground: a 10% climb costs about 1.4× flat, the quickest gradient is a gentle 5% descent, and steep descents slow down again. A late-race slowdown (default 10%) is added in a straight line from start to finish. The target time, minus checkpoint stops, is shared out in proportion to those weights, so the plan always lands exactly on the target.
+
+**Her own pace.** With recorded runs imported, the generic curve is replaced by hers. Each run has stops removed (under 0.25 m/s of real progress over 30 seconds, or long gaps), is resampled every 50 m with heights smoothed over about 200 m, and is cut into 200 m pieces of gradient and pace. Each run is scaled by its own flat pace so easy and hard days compare, the pieces are grouped into gradient bands, and each band's median is blended with the generic curve where there's little data (six pieces, 1.2 km, before her data outweighs it). The race plan then shares the target out using her curve, and predicts a finish from her recent flat pace with the late-race slowdown.
 
 Fuel per leg: a drink mix covers the fluid target, gels, chews and food top up carbs in turn, and salt tabs top up sodium to match fluid × sweat sodium. Caffeine products are held back until a chosen km (default halfway). The app warns if fluid is above sweat rate (hyponatraemia risk) or caffeine is above 3–6 mg/kg.

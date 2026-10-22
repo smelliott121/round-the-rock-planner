@@ -12,7 +12,7 @@
   var KEYS = {
     planner: 'rtr-planner-v1', section: 'rtr-map-v1', gen: 'rtr-gen-v1', routes: 'rtr-routes-v1', geo: 'rtr-geo-v1',
     app: 'rtr-app-v1', notes: 'rtr-notes-v1', gut: 'rtr-gut-v1', kit: 'rtr-kit-v1', shoes: 'rtr-shoes-v1',
-    wx: 'rtr-wx-v1', pois: 'rtr-pois-v1'
+    wx: 'rtr-wx-v1', pois: 'rtr-pois-v1', pace: 'rtr-pace-v1'
   };
 
   function load(key, def) {
@@ -433,6 +433,8 @@
   function saveApp() { save(KEYS.app, appState); }
 
   function tab(name, def) { tabs[name] = def; order.push(name); }
+  var inits = [];
+  function onInit(fn) { inits.push(fn); }
   function show(name) {
     if (!tabs[name]) name = 'today';
     if (flying) stopFly();
@@ -605,6 +607,7 @@
       document.querySelector('.map-tools').hidden = true;
     }
     bindFields();
+    inits.forEach(function (fn) { fn(); });
     order.forEach(function (n) { if (tabs[n].init) tabs[n].init(); });
     document.querySelectorAll('.tabbar [data-tab]').forEach(function (b) { b.addEventListener('click', function () { show(b.dataset.tab); }); });
     $('toolNote').addEventListener('click', function () { setNoteMode(!noteMode); });
@@ -639,7 +642,7 @@
     fly: fly, stopFly: stopFly, isFlying: function () { return flying; },
     profileSVG: profileSVG, kmFromSvgClick: kmFromSvgClick, download: download, slug: slug,
     setSheet: setSheet, sheetState: function () { return sheetState; },
-    tab: tab, show: show, current: function () { return current; }, refreshAside: refreshAside, subnav: subnav, seg: seg,
+    tab: tab, onInit: onInit, show: show, current: function () { return current; }, refreshAside: refreshAside, subnav: subnav, seg: seg,
     state: appState, saveState: saveApp,
     wxText: wxText, compass: compass, windArrow: windArrow, clockAt: clockAt, dayKey: dayKey,
     start: start

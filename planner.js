@@ -22,11 +22,28 @@
       var lon = attrs.match(/lon\s*=\s*["']([-\d.eE+]+)["']/);
       if (!lat || !lon) continue;
       var ele = body.match(/<ele>\s*([-\d.eE+]+)\s*<\/ele>/);
-      var p = { lat: +lat[1], lon: +lon[1], ele: ele ? +ele[1] : null };
+      var tm = body.match(/<time>\s*([^<\s]+)\s*<\/time>/);
+      var t = tm ? Date.parse(tm[1]) : NaN;
+      var p = { lat: +lat[1], lon: +lon[1], ele: ele ? +ele[1] : null, time: isNaN(t) ? null : t };
       (m[1] === 'trkpt' ? trk : rte).push(p);
     }
     return trk.length ? trk : rte;
   }
+
+  // TCX (Garmin/COROS training files): <Trackpoint><Time/><Position/><AltitudeMeters/></Trackpoint>
+  function parseTCX(text) {
+    var re = /<Trackpoint\b[^>]*>([\s\S]*?)<\/Trackpoint>/g, out = [], m;
+    while ((m = re.exec(text))) {
+      var b = m[1];
+      var la = b.match(/<LatitudeDegrees>\s*([-\d.eE+]+)/), lo = b.match(/<LongitudeDegrees>\s*([-\d.eE+]+)/);
+      if (!la || !lo) continue;
+      var el = b.match(/<AltitudeMeters>\s*([-\d.eE+]+)/), tm = b.match(/<Time>\s*([^<\s]+)/);
+      var t = tm ? Date.parse(tm[1]) : NaN;
+      out.push({ lat: +la[1], lon: +lo[1], ele: el ? +el[1] : null, time: isNaN(t) ? null : t });
+    }
+    return out;
+  }
+  function parseTrack(text) { return /<TrainingCenterDatabase/i.test(text) ? parseTCX(text) : parseGPX(text); }
 
   function haversineKm(a, b) {
     var R = 6371, rad = Math.PI / 180;
@@ -91,6 +108,21 @@
     return Math.exp(-3.5 * 0.05) / Math.exp(-3.5 * Math.abs(g + 0.05));
   }
 
+  // Time cost of a gradient relative to flat: her personal curve if one is given, otherwise Tobler.
+  function costOf(model, g) {
+    if (!model || !model.pts || model.pts.length < 2) return gradeCost(g);
+    var pts = model.pts, n = pts.length;
+    if (g <= pts[0][0]) return pts[0][1] * gradeCost(g) / gradeCost(pts[0][0]);
+    if (g >= pts[n - 1][0]) return pts[n - 1][1] * gradeCost(g) / gradeCost(pts[n - 1][0]);
+    for (var i = 1; i < n; i++) {
+      if (g <= pts[i][0]) {
+        var a = pts[i - 1], b = pts[i], t = (g - a[0]) / (b[0] - a[0]);
+        return a[1] + t * (b[1] - a[1]);
+      }
+    }
+    return pts[n - 1][1];
+  }
+
   function indexAt(profile, km) {
     return Math.max(0, Math.min(profile.dist.length - 1, Math.round(km / STEP_KM)));
   }
@@ -114,7 +146,7 @@
       if (seg <= 0) { w.push(sum); continue; }
       var g = (profile.ele[i + 1] - profile.ele[i]) / (seg * 1000);
       var mid = (profile.dist[i] + profile.dist[i + 1]) / 2;
-      sum += gradeCost(g) * (1 + fatigue * (mid / total)) * seg;
+      sum += costOf(opts.model, g) * (1 + fatigue * (mid / total)) * seg;
       w.push(sum);
     }
     var scale = moving / sum;
@@ -304,7 +336,7 @@
     return pts.map(function (p) { return { lat: p.lat, lon: p.lon, km: p.km, ele: eleAt(profile, p.km) }; });
   }
 
-  function sectionStats(profile, fromKm, toKm, flatPaceMin, outAndBack) {
+  function sectionStats(profile, fromKm, toKm, flatPaceMin, outAndBack, model) {
     var i0 = Math.round(fromKm / STEP_KM), i1 = Math.round(toKm / STEP_KM);
     var c = climbBetween(profile, i0, i1);
     var t = 0;
@@ -312,8 +344,8 @@
       var seg = profile.dist[i + 1] - profile.dist[i];
       if (seg <= 0) continue;
       var g = (profile.ele[i + 1] - profile.ele[i]) / (seg * 1000);
-      t += gradeCost(g) * seg * flatPaceMin;
-      if (outAndBack) t += gradeCost(-g) * seg * flatPaceMin;
+      t += costOf(model, g) * seg * flatPaceMin;
+      if (outAndBack) t += costOf(model, -g) * seg * flatPaceMin;
     }
     var km = toKm - fromKm;
     return {
@@ -356,6 +388,125 @@
     return (Math.atan2(y, x) / rad + 360) % 360;
   }
 
+  /*
+   * Learning her pace from recorded runs.
+   * analyseRun: drop stops (watch standing still, or long gaps), resample every 50 m along the
+   *   moving track, smooth heights over about 200 m, then cut into 200 m chunks of [grade, min/km].
+   * fitPaceModel: each run is scaled by its own flat pace (so easy and hard days compare), chunks
+   *   are grouped into gradient bands, and each band's median is blended with the generic curve
+   *   when there's little data. The result is her pace at each gradient relative to flat.
+   */
+  var BANDS = [-0.45, -0.25, -0.15, -0.09, -0.045, -0.015, 0.015, 0.045, 0.09, 0.15, 0.25, 0.45];
+  function median(a) {
+    if (!a.length) return NaN;
+    var s = a.slice().sort(function (x, y) { return x - y; }), m = s.length >> 1;
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  }
+
+  function analyseRun(points) {
+    var pts = (points || []).filter(function (p) { return p.time != null; });
+    if (pts.length < 20) throw new Error('no-times');
+    // Standing still: GPS drift makes a stop look like slow shuffling, so judge by real progress
+    // over 30-second windows. Under 0.25 m/s of net progress counts as stopped.
+    var still = new Array(pts.length).fill(false), j0 = 0;
+    for (var w = 1; w < pts.length; w++) {
+      while (j0 < w && pts[w].time - pts[j0].time > 30000) j0++;
+      var back = j0 > 0 && pts[w].time - pts[j0 - 1].time <= 45000 ? j0 - 1 : j0;
+      var span = (pts[w].time - pts[back].time) / 1000;
+      if (span >= 20 && haversineKm(pts[back], pts[w]) * 1000 / span < 0.25) for (var q = back + 1; q <= w; q++) still[q] = true;
+    }
+    var D = [0], T = [0], E = [pts[0].ele], stopped = 0;
+    for (var i = 1; i < pts.length; i++) {
+      var d = haversineKm(pts[i - 1], pts[i]) * 1000, dt = (pts[i].time - pts[i - 1].time) / 1000;
+      var pause = dt <= 0 || still[i] || (dt > 120 && d / dt < 1);
+      if (pause) { if (dt > 0) stopped += dt; d = 0; dt = 0; }
+      D.push(D[i - 1] + d); T.push(T[i - 1] + dt);
+      E.push(pts[i].ele != null ? pts[i].ele : E[i - 1]);
+    }
+    var totalM = D[D.length - 1];
+    if (totalM < 1000) throw new Error('too-short');
+    if (E.some(function (e) { return e == null; })) throw new Error('no-heights');
+    // Resample every 50 m.
+    var S = 50, rs = [], j = 0;
+    for (var x = 0; x <= totalM; x += S) {
+      while (j < D.length - 2 && D[j + 1] < x) j++;
+      var span = D[j + 1] - D[j], f = span > 0 ? (x - D[j]) / span : 0;
+      rs.push({ t: T[j] + f * (T[j + 1] - T[j]), e: E[j] + f * (E[j + 1] - E[j]) });
+    }
+    var sm = rs.map(function (_, k) {
+      var sum = 0, c = 0;
+      for (var q = Math.max(0, k - 2); q <= Math.min(rs.length - 1, k + 2); q++) { sum += rs[q].e; c++; }
+      return sum / c;
+    });
+    var chunks = [], up = 0;
+    for (var k2 = 1; k2 < sm.length; k2++) up += Math.max(0, sm[k2] - sm[k2 - 1]);
+    for (var a = 0; a + 4 < rs.length; a += 4) {
+      var g = (sm[a + 4] - sm[a]) / 200, pace = (rs[a + 4].t - rs[a].t) / 60 / 0.2;
+      if (Math.abs(g) <= 0.45 && pace >= 2.5 && pace <= 30) chunks.push([+g.toFixed(4), +pace.toFixed(3)]);
+    }
+    if (chunks.length < 5) throw new Error('too-short');
+    return {
+      date: new Date(pts[0].time).toISOString().slice(0, 10),
+      km: totalM / 1000, movingMin: T[T.length - 1] / 60, stoppedMin: stopped / 60, ascent: up,
+      flatPace: flatReference(chunks), chunks: chunks
+    };
+  }
+
+  // A run's own flat pace: the median of its flat chunks, or (on a hilly run with little flat)
+  // its paces with the generic hill cost taken out.
+  function flatReference(chunks) {
+    var flat = chunks.filter(function (c) { return Math.abs(c[0]) < 0.025; }).map(function (c) { return c[1]; });
+    if (flat.length >= 5) return median(flat);
+    return median(chunks.map(function (c) { return c[1] / gradeCost(c[0]); }));
+  }
+
+  function fitPaceModel(runs) {
+    var groups = [];
+    for (var b = 0; b < BANDS.length - 1; b++) groups.push({ g: [], r: [] });
+    var total = 0;
+    (runs || []).forEach(function (run) {
+      var ref = run.flatPace;
+      if (!(ref > 0)) return;
+      run.chunks.forEach(function (c) {
+        for (var b = 0; b < BANDS.length - 1; b++) {
+          if (c[0] >= BANDS[b] && c[0] < BANDS[b + 1]) { groups[b].g.push(c[0]); groups[b].r.push(c[1] / ref); total++; break; }
+        }
+      });
+    });
+    if (total < 20) return null;
+    var K = 6;   // chunks (1.2 km) of evidence before her data outweighs the generic curve
+    var pts = groups.map(function (gr, b) {
+      var mid = (BANDS[b] + BANDS[b + 1]) / 2;
+      var x = gr.g.length >= 3 ? median(gr.g) : mid;
+      if (b === 5) x = 0;   // the flat band is pinned to 0%
+      var n = gr.r.length, prior = gradeCost(x) / gradeCost(0);
+      var v = n ? (n * median(gr.r) + K * prior) / (n + K) : prior;
+      return [x, v, n];
+    });
+    var flat = pts[5][1];
+    pts = pts.map(function (p) { return [+p[0].toFixed(4), +(p[1] / flat).toFixed(4), p[2]]; });
+    for (var i = 1; i < pts.length; i++) if (pts[i][0] <= pts[i - 1][0]) pts[i][0] = pts[i - 1][0] + 0.001;
+    var recent = runs.slice().sort(function (x, y) { return x.date < y.date ? 1 : -1; }).slice(0, 5);
+    var w = 0, sp = 0;
+    recent.forEach(function (r) { w += r.km; sp += r.flatPace * r.km; });
+    var steepest = { up: 0, down: 0 };
+    pts.forEach(function (p) { if (p[2] >= 3) { steepest.up = Math.max(steepest.up, p[0]); steepest.down = Math.min(steepest.down, p[0]); } });
+    return { pts: pts.map(function (p) { return [p[0], p[1]]; }), counts: pts.map(function (p) { return p[2]; }),
+      flatPace: sp / w, chunks: total, runs: runs.length, steepest: steepest };
+  }
+
+  // Moving minutes for a whole course at a given flat pace, using her curve and the late-race slowdown.
+  function predictMoving(profile, model, flatPaceMin, fatigue) {
+    var sum = 0, total = profile.totalKm;
+    for (var i = 0; i < profile.dist.length - 1; i++) {
+      var seg = profile.dist[i + 1] - profile.dist[i];
+      if (seg <= 0) continue;
+      var g = (profile.ele[i + 1] - profile.ele[i]) / (seg * 1000), mid = (profile.dist[i] + profile.dist[i + 1]) / 2;
+      sum += costOf(model, g) * (1 + (fatigue || 0) * (mid / total)) * seg;
+    }
+    return sum * flatPaceMin;
+  }
+
   function fmtCount(n) { return (n % 1 ? n.toFixed(1) : String(n)) + '×'; }
 
   function fmtDur(min) {
@@ -377,7 +528,8 @@
   }
 
   var api = {
-    parseGPX: parseGPX, buildProfile: buildProfile, computePlan: computePlan,
+    parseGPX: parseGPX, parseTCX: parseTCX, parseTrack: parseTrack, buildProfile: buildProfile, computePlan: computePlan,
+    costOf: costOf, analyseRun: analyseRun, fitPaceModel: fitPaceModel, predictMoving: predictMoving,
     gradeCost: gradeCost, elevationSamples: elevationSamples, applyElevation: applyElevation,
     sweatRate: sweatRate, computeFuel: computeFuel,
     sectionPoints: sectionPoints, sectionStats: sectionStats, hilliestWindow: hilliestWindow,

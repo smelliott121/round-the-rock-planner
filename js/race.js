@@ -84,7 +84,7 @@
     var target = P.parseHM($('target').value), start = P.parseHM($('start').value);
     if (target == null || start == null) throw new Error('Enter the target as h:mm, for example 11:00.');
     plan = P.computePlan(profile, {
-      targetMin: target, startMin: start, fatigue: A.num('fatigue', 0) / 100,
+      targetMin: target, startMin: start, fatigue: A.num('fatigue', 0) / 100, model: A.paceModel(),
       carbsPerHour: A.num('carbs', 0), fluidPerHour: A.num('fluid', 0), finishCutoffMin: P.parseHM($('finishCutoff').value),
       checkpoints: pl.checkpoints.map(function (c) { return { name: c.name, km: c.km, stopMin: c.stopMin || 0, cutoffMin: P.parseHM(c.cutoff) }; })
     });
@@ -115,6 +115,7 @@
       '<span>Moving <b>' + P.fmtPace(plan.movingMin / plan.totalKm) + '/km</b></span>' +
       '<span>Stops <b>' + Math.round(plan.stopsMin) + ' min</b></span>' +
       '<span>Carbs <b>' + Math.round(fuel.sum.needCarbs) + ' g</b></span><span>Sodium <b>' + Math.round(fuel.sum.needSodium) + ' mg</b></span>';
+    renderPredict();
     $('warnings').innerHTML = fuel.warnings.map(function (w) { return '<div class="warnbox">' + esc(w) + '</div>'; }).join('');
 
     var html = '<thead><tr><th>Point</th><th>km</th><th>Arrive</th><th class="hide-sm">Elapsed</th><th class="hide-sm">Climb</th><th>Pace</th><th>Carbs</th><th>Buffer</th></tr></thead><tbody>';
@@ -164,6 +165,36 @@
   function renderProfile() {
     if (!profile) return;
     $('raceProfile').innerHTML = A.profileSVG(profile, { axis: true, marks: pl.checkpoints.map(function (c) { return c.km; }) });
+  }
+
+  // ---------- Predicted finish from her own pace ----------
+  function renderPredict() {
+    var box = $('predict');
+    if (!profile || !plan) { box.innerHTML = ''; return; }
+    var model = A.paceModel();
+    if (!model && A.learnedFlatPace()) {
+      box.innerHTML = '<p class="hint">Your own pace is switched off, so splits use an average runner. Turn it back on under <a href="#" id="toPace">Run, My pace</a>.</p>';
+      $('toPace').addEventListener('click', function (e) { e.preventDefault(); A.emit('open-pace'); });
+      return;
+    }
+    if (!model) {
+      box.innerHTML = '<p class="hint">Want a predicted finish? Add a few recorded runs under <a href="#" id="toPace">Run, My pace</a> and the splits will use how you actually run hills.</p>';
+      $('toPace').addEventListener('click', function (e) { e.preventDefault(); A.emit('open-pace'); });
+      return;
+    }
+    var fatigue = A.num('fatigue', 0) / 100;
+    var finish = Math.round(P.predictMoving(profile, model, model.flatPace, fatigue) + plan.stopsMin);
+    var gap = plan.target - finish;
+    box.innerHTML = '<h3>On your current form</h3><div class="stats"><span>Predicted finish <b>' + P.fmtDur(finish) + '</b></span><span>Clock <b>' + P.fmtClock(plan.start + finish) + '</b></span>' +
+      '<span>' + (Math.abs(gap) < 3 ? 'Right on your target' : (gap > 0 ? P.fmtDur(gap) + ' inside your target' : P.fmtDur(-gap) + ' over your target')) + '</span></div>' +
+      '<p class="hint">Holding your training flat pace of ' + P.fmtPace(model.flatPace) + '/km with your own hill pace, slowing ' + Math.round(fatigue * 100) + '% by the end. ' +
+      'An ultra usually slows more than shorter training runs suggest, so treat this as a best case until you\'ve logged some long runs.</p>' +
+      (Math.abs(gap) >= 3 ? '<div class="actions"><button type="button" class="btn quiet" id="usePredict">Use ' + P.fmtDur(finish) + ' as my target</button></div>' : '');
+    var b = $('usePredict');
+    if (b) b.addEventListener('click', function () {
+      var t = $('target'); t.value = P.fmtDur(finish); t.dispatchEvent(new Event('input'));
+      A.toast('Target set to ' + P.fmtDur(finish));
+    });
   }
 
   // ---------- Race-day forecast (within 16 days) ----------
@@ -222,7 +253,7 @@
     $('secOab').checked = !!sec.oab; if (document.activeElement !== $('secPace')) $('secPace').value = sec.pace;
     document.querySelectorAll('#presets .chip').forEach(function (c) { c.setAttribute('aria-pressed', c.dataset.id === sec.preset ? 'true' : 'false'); });
     saveSec();
-    var m = P.parseHM(sec.pace), st = P.sectionStats(profile, sec.from, sec.to, m != null ? m / 60 : 6.5, sec.oab);
+    var m = P.parseHM(sec.pace), st = P.sectionStats(profile, sec.from, sec.to, m != null ? m / 60 : 6.5, sec.oab, A.paceModel());
     $('secStats').innerHTML = '<span><b>' + st.km.toFixed(1) + ' km</b></span><span><b>+' + Math.round(st.up) + ' m</b> climb</span><span>About <b>' + P.fmtDur(st.minutes) + '</b></span>';
     $('secProfile').innerHTML = A.profileSVG(profile, { from: sec.from, to: sec.to, height: 110 });
     if (A.current() === 'race' && sub && sub.get() === 'sections') {
@@ -296,6 +327,11 @@
       });
       $('print').addEventListener('click', printSheet);
       A.on('plan', function () { if (profile) { renderPlan(); renderRaceWx(); } });
+      A.on('pace-model', function () {
+        var lp = A.learnedFlatPace();
+        if (lp && sec.pace === '6:30') sec.pace = P.fmtPace(lp);
+        if (profile) renderAll();
+      });
       A.on('products', function () { if (profile) renderPlan(); });
       A.on('races', function () { if (profile) renderRaceWx(); });
 

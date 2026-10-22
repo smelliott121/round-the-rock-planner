@@ -100,7 +100,7 @@
     return { id: id || null, name: name, profile: prof, source: source,
       points: prof.raw.map(function (p) { return { lat: p.lat, lon: p.lon, ele: P.eleAt(prof, p.km) }; }) };
   }
-  function stats(r) { return P.sectionStats(r.profile, 0, r.profile.totalKm, flatPace(), false); }
+  function stats(r) { return P.sectionStats(r.profile, 0, r.profile.totalKm, flatPace(), false, A.paceModel()); }
 
   function renderResults() {
     var box = $('results');
@@ -126,7 +126,7 @@
 
   function renderDetail() {
     var box = $('routeDetail');
-    if (!current) { box.hidden = true; return; }
+    if (!current || (sub && sub.get() === 'pace')) { box.hidden = true; return; }
     box.hidden = false;
     var s = stats(current);
     $('rdTitle').textContent = current.name;
@@ -219,7 +219,13 @@
     snap: 'half',
     aside: function () { return library.length ? library.length + ' saved' : ''; },
     init: function () {
-      sub = A.subnav('runNav', 'run', function () { $('places').innerHTML = ''; });
+      sub = A.subnav('runNav', 'run', function (v) { $('places').innerHTML = ''; $('routeDetail').hidden = v === 'pace' || !current; });
+      A.on('open-pace', function () { A.show('run'); sub.set('pace'); A.setSheet('full'); });
+      A.on('pace-model', function () {
+        var lp = A.learnedFlatPace();
+        if (lp && gen.pace === '6:30') { gen.pace = P.fmtPace(lp); $('genPace').value = gen.pace; saveGen(); }
+        renderResults(); if (current) renderDetail();
+      });
       $('genKm').value = gen.km; $('genPace').value = gen.pace;
       $('genKm').addEventListener('change', function () { gen.km = Math.max(3, Math.min(50, parseFloat(this.value) || 15)); this.value = gen.km; saveGen(); });
       $('genPace').addEventListener('input', function () { gen.pace = this.value; saveGen(); if (current) renderDetail(); renderResults(); });

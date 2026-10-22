@@ -94,6 +94,7 @@
             <div><label for="finishCutoff">Finish cutoff</label><input id="finishCutoff" type="time" value="18:00"></div>
             <div><label for="fatigue">Late-race slowdown (%)</label><input id="fatigue" type="number" min="0" max="50" value="10"></div>
           </div>
+          <div id="predict"></div>
           <div id="raceWx"></div>
           <h2>Race-day plan</h2>
           <div class="stats" id="summary"></div>
@@ -145,6 +146,7 @@
       <div class="seg subnav" id="runNav">
         <button type="button" data-v="plan">New route</button>
         <button type="button" data-v="saved">Lucy's routes</button>
+        <button type="button" data-v="pace">My pace</button>
       </div>
 
       <div class="sub" data-sub="plan">
@@ -183,6 +185,19 @@
           <input id="importGpx" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" multiple>
         </div>
         <p class="hint">Saved on this phone only.</p>
+      </div>
+
+      <div class="sub" data-sub="pace" hidden>
+        <p>Add a few of your recorded runs and the app learns how hills change your pace. Splits, training times and a predicted finish then use your own numbers.</p>
+        <div class="field">
+          <label for="paceFiles">Add runs (GPX or TCX)</label>
+          <input id="paceFiles" type="file" accept=".gpx,.tcx,application/gpx+xml,application/xml,text/xml" multiple>
+        </div>
+        <p class="hint">In the COROS app, open a run, tap the settings icon at the top right, then Export Data and choose GPX. Hilly runs at a steady effort teach it the most; four to six is a good start.</p>
+        <p class="hint" id="paceProgress" aria-live="polite"></p>
+        <div id="paceResult"></div>
+        <h2 id="paceRunsTitle" hidden>Runs it learned from</h2>
+        <div class="list" id="paceRuns"></div>
       </div>
 
       <div id="routeDetail" class="section" hidden>
@@ -326,6 +341,7 @@
 <script src="js/app.js"></script>
 <script src="js/today.js"></script>
 <script src="js/race.js"></script>
+<script src="js/pace.js"></script>
 <script src="js/run.js"></script>
 <script src="js/fuel.js"></script>
 <script src="js/kit.js"></script>
